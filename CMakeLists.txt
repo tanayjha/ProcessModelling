@@ -19,6 +19,8 @@ add_subdirectory(tests)
 # ---- Example generator (engine-only helper) ----
 add_executable(make_example examples/make_loop.cpp)
 target_link_libraries(make_example PRIVATE umpnap_engine)
+add_executable(make_drain examples/make_drain.cpp)
+target_link_libraries(make_drain PRIVATE umpnap_engine)
 
 # ---- GUI (optional; needs Qt6) ----
 find_package(Qt6 COMPONENTS Widgets QUIET)

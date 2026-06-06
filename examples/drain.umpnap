@@ -1,0 +1,12 @@
+{
+  "nextId": 4,
+  "components": [
+    {"id": 1, "type": "Tank", "domain": "Hydraulic", "x": 80, "y": 160, "fluid": "Light Water", "params": {"area": 5, "level": 5, "p_top": 101300}},
+    {"id": 2, "type": "Valve", "domain": "Hydraulic", "x": 320, "y": 160, "fluid": "Light Water", "params": {"Kv": 150, "position": 1}},
+    {"id": 3, "type": "Boundary", "domain": "Hydraulic", "x": 560, "y": 160, "fluid": "Light Water", "params": {"pressure": 101300}}
+  ],
+  "connections": [
+    {"compA": 1, "portA": "p", "compB": 2, "portB": "in"},
+    {"compA": 2, "portA": "out", "compB": 3, "portB": "p"}
+  ]
+}
