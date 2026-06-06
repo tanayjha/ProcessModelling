@@ -41,6 +41,7 @@ MainWindow::MainWindow() {
   addDockWidget(Qt::LeftDockWidgetArea, hierarchy_);
   addDockWidget(Qt::RightDockWidgetArea, properties_);
   addDockWidget(Qt::BottomDockWidgetArea, trends_);
+  resizeDocks({trends_}, {300}, Qt::Vertical);
 
   connect(palette_, &PaletteDock::typeSelected, scene_, &DiagramScene::setArmedType);
   connect(scene_, &DiagramScene::componentSelected, properties_,

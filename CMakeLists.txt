@@ -42,3 +42,8 @@ if(Qt6_FOUND)
 else()
   message(STATUS "Qt6 not found - building engine + tests only")
 endif()
+
+if(Qt6_FOUND)
+  add_executable(umpnap_trendcheck tools/trend_check.cpp)
+  target_link_libraries(umpnap_trendcheck PRIVATE umpnap_gui)
+endif()
