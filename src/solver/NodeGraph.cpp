@@ -1,0 +1,106 @@
+#include "solver/NodeGraph.h"
+
+#include "components/hydraulic/BranchLaw.h"
+#include "core/FluidLibrary.h"
+
+namespace umpnap {
+
+namespace {
+constexpr double kG = 9.80665;
+
+// Simple union-find over an integer index space.
+struct UnionFind {
+  std::vector<int> parent;
+  void init(int n) {
+    parent.resize(n);
+    for (int i = 0; i < n; ++i) parent[i] = i;
+  }
+  int find(int x) {
+    while (parent[x] != x) {
+      parent[x] = parent[parent[x]];
+      x = parent[x];
+    }
+    return x;
+  }
+  void unite(int a, int b) { parent[find(a)] = find(b); }
+};
+}  // namespace
+
+NodeGraph buildNodeGraph(const Network& net) {
+  NodeGraph g;
+
+  // Assign every (component, port) a dense index.
+  std::map<std::pair<int, std::string>, int> portIndex;
+  std::vector<std::pair<int, std::string>> portList;
+  for (const auto& c : net.components()) {
+    for (const auto& p : c->ports) {
+      portIndex[{c->id, p.name}] = (int)portList.size();
+      portList.push_back({c->id, p.name});
+    }
+  }
+
+  UnionFind uf;
+  uf.init((int)portList.size());
+
+  // Union ports joined by connections.
+  for (const auto& conn : net.connections()) {
+    auto a = portIndex.find({conn.compA, conn.portA});
+    auto b = portIndex.find({conn.compB, conn.portB});
+    if (a != portIndex.end() && b != portIndex.end()) uf.unite(a->second, b->second);
+  }
+  // Union all ports of each Junction (ideal zero-drop node).
+  for (const auto& c : net.components()) {
+    if (c->type != "Junction") continue;
+    if (c->ports.empty()) continue;
+    int first = portIndex[{c->id, c->ports[0].name}];
+    for (size_t i = 1; i < c->ports.size(); ++i)
+      uf.unite(first, portIndex[{c->id, c->ports[i].name}]);
+  }
+
+  // Map union-find roots to dense node ids.
+  std::map<int, int> rootToNode;
+  auto nodeFor = [&](int portIdx) {
+    int root = uf.find(portIdx);
+    auto it = rootToNode.find(root);
+    if (it != rootToNode.end()) return it->second;
+    int id = g.nodeCount++;
+    rootToNode[root] = id;
+    return id;
+  };
+
+  for (size_t i = 0; i < portList.size(); ++i) {
+    int node = nodeFor((int)i);
+    g.portNode[portList[i]] = node;
+  }
+
+  g.fixed.assign(g.nodeCount, false);
+  g.fixedP.assign(g.nodeCount, 0.0);
+
+  // Pin Boundary/Tank node pressures.
+  for (const auto& c : net.components()) {
+    if (c->type == "Boundary") {
+      int n = g.portNode[{c->id, "p"}];
+      g.fixed[n] = true;
+      g.fixedP[n] = c->param("pressure");
+    } else if (c->type == "Tank") {
+      int n = g.portNode[{c->id, "p"}];
+      FluidProps f = FluidLibrary::props(c->fluid);
+      g.fixed[n] = true;
+      g.fixedP[n] = c->param("p_top") + f.density * kG * c->param("level");
+    }
+  }
+
+  // Branches from each two-port flow element.
+  for (const auto& c : net.components()) {
+    if (!isBranch(c->type)) continue;
+    Branch b;
+    b.compId = c->id;
+    b.inNode = g.portNode[{c->id, "in"}];
+    b.outNode = g.portNode[{c->id, "out"}];
+    g.branches.push_back(b);
+  }
+
+  return g;
+}
+
+}  // namespace umpnap
