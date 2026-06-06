@@ -1,0 +1,17 @@
+{
+  "nextId": 6,
+  "components": [
+    {"id": 1, "type": "Tank", "domain": "Hydraulic", "x": 80, "y": 240, "fluid": "Heavy Water (D2O)", "params": {"area": 3, "level": 4, "p_top": 101300}},
+    {"id": 2, "type": "Pump", "domain": "Hydraulic", "x": 300, "y": 80, "fluid": "Heavy Water (D2O)", "params": {"H0": 60, "a": 4000}},
+    {"id": 3, "type": "Pipe", "domain": "Hydraulic", "x": 540, "y": 80, "fluid": "Heavy Water (D2O)", "params": {"diameter": 0.2, "length": 25, "roughness": 4.5e-05}},
+    {"id": 4, "type": "HeatExchanger", "domain": "Hydraulic", "x": 540, "y": 240, "fluid": "Heavy Water (D2O)", "params": {"K_hx": 20000}},
+    {"id": 5, "type": "Valve", "domain": "Hydraulic", "x": 300, "y": 240, "fluid": "Heavy Water (D2O)", "params": {"Kv": 8, "position": 0.8}}
+  ],
+  "connections": [
+    {"compA": 1, "portA": "p", "compB": 2, "portB": "in"},
+    {"compA": 2, "portA": "out", "compB": 3, "portB": "in"},
+    {"compA": 3, "portA": "out", "compB": 4, "portB": "in"},
+    {"compA": 4, "portA": "out", "compB": 5, "portB": "in"},
+    {"compA": 5, "portA": "out", "compB": 1, "portB": "p"}
+  ]
+}

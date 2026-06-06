@@ -1,0 +1,134 @@
+# UMPNAP — Unified Multi-Domain Process Network Analysis Platform
+
+A local, offline, Qt-based process-network analysis platform. You drag components
+from a palette onto a P&ID canvas, wire them together, configure parameters and a
+working fluid, then solve the network and trend the results.
+
+This is **Phase 1** of the design proposal: a real, analytically-validated
+single-phase **hydraulic** Newton-Raphson solver, behind an architecture built to
+accept the gas / thermal / electrical domains later.
+
+![UMPNAP canvas — moderator-style D2O loop](docs/umpnap_canvas.png)
+
+*(The image above is a real render of the bundled `examples/loop.umpnap`: a closed
+heavy-water loop — Tank → Pump → Pipe → Heat Exchanger → Valve → Tank.)*
+
+## What works today
+
+- **Drag-and-drop P&ID editor** (Qt `QGraphicsView`): place components, drag to
+  move, drag port-to-port to wire, `Delete` to remove. Connection validation
+  rejects inlet→inlet / outlet→outlet.
+- **Hydraulic solver**: nodal pressure formulation, Newton-Raphson with a dense LU
+  linear solver, mass conservation at every node. Steady-state and transient
+  (explicit-Euler tank-level integration).
+- **Generic fluid property package**: Light Water, Heavy Water (D2O), Oil, Air,
+  Helium, Nitrogen. The *same* Pipe/Pump/Valve adapts to the selected fluid — no
+  hardcoded fluid constants.
+- **Plugin component library** (hydraulic): Boundary, Tank, Pipe, Valve, Orifice,
+  Pump, Junction, Heat Exchanger. Palette and property editor are generated from
+  the registry.
+- **Property editor**, **model-hierarchy browser**, **trend plots** (`QPainter`),
+  **CSV export**, and full **project save/load** (`.umpnap` JSON).
+- **In-app solver validation**: `Help ▸ Validate Solver` runs a series+parallel
+  network with a closed-form answer and reports the error (matches to ~5e-10).
+
+## What is stubbed (later phases)
+
+Gas, thermal, and electrical solvers are **registered behind the same `ISolver`
+interface but do not solve yet** — they report "not implemented". Coupled
+gas–liquid (cover-gas) and two-phase/steam are not attempted. One correct,
+validated hydraulic solver was prioritised over five unverified ones.
+
+## Dependencies
+
+- A C++17 compiler (tested with Apple clang 17)
+- CMake ≥ 3.16
+- Qt6 Widgets — only needed for the GUI. The engine + tests build without Qt.
+  - macOS: `brew install qt`
+  - RHEL/Bharat Linux: install the `qt6-qtbase`/`qt6-qtbase-devel` packages
+
+No other third-party libraries. The linear algebra and JSON I/O are in-tree, and
+the platform makes **no network calls** (fully offline).
+
+## Build, test, run
+
+```bash
+# Configure (point CMake at Qt; on macOS use the brew prefix)
+cmake -S . -B build -DCMAKE_PREFIX_PATH="$(brew --prefix qt)"
+
+# Build everything (engine, tests, GUI)
+cmake --build build -j4
+
+# Run the test suite (engine is Qt-free, so this works even without Qt)
+ctest --test-dir build --output-on-failure
+
+# Launch the GUI
+./build/umpnap
+```
+
+If Qt6 is not found, CMake still builds the engine and tests (`ctest` passes);
+only the `umpnap` GUI target is skipped.
+
+### Using the app
+
+1. Click a component type in the **Component Palette** (left), then click the
+   canvas to place it.
+2. Drag from one component's **port handle** (the colored dots) to another port to
+   wire them. Green = inlet, red = outlet, blue = bidirectional.
+3. Select a component to edit its parameters and **fluid** in the **Properties**
+   dock (right).
+4. `Run ▸ Run Steady` (or `Run ▸ Run Transient…`) to solve. Pick signals in the
+   **Trends** dock (bottom) to plot pressure / flow / level / pump head / valve
+   position. `File ▸ Export Results CSV…` to save.
+5. `File ▸ Open…` `examples/loop.umpnap` to load the bundled example.
+
+## Architecture
+
+The engine is a Qt-free static library (`umpnap_engine`) so it is independently
+testable; the GUI links it. The GUI never solves — it only edits a `Network`,
+which the `SolverManager` consumes.
+
+```
+src/
+  core/        Component, Network, ComponentRegistry, FluidLibrary,
+               Results, Project (JSON)
+  solver/      LinAlg (dense LU), NodeGraph, ISolver, HydraulicSolver,
+               SolverManager, StubSolvers, Validation
+  components/
+    hydraulic/ BranchLaw (Darcy-Weisbach, orifice, valve, pump, HX laws)
+  gui/         DiagramScene + items, Palette/Property/Hierarchy/Trend docks,
+               MainWindow
+tests/         10 CTest unit tests (LU, fluids, network, registry, branch laws,
+               node graph, solver, validation, project round-trip)
+examples/      loop.umpnap + the generator that produced it
+```
+
+### Solver in one paragraph
+
+Unknowns are the pressures at the network's free nodes (junctions collapse to a
+single node; boundaries and tanks pin their pressure). Each branch element gives a
+flow `Q(ΔP)` and its derivative: pipes use Darcy-Weisbach with a laminar/Swamee-Jain
+friction factor, orifices/valves/heat-exchangers use a quadratic resistance, pumps
+use a `H = H0 − a·Q²` head curve. Mass conservation at each free node forms
+`F(P)=0`, solved by Newton-Raphson (`J·ΔP = −F` via dense LU) with a backtracking
+line search. Transient runs integrate tank levels and re-solve each step.
+
+## How to add a component
+
+1. Register a `ComponentDef` (type, domain, ports, parameter schema) in
+   `registerHydraulicComponents()` (`src/core/ComponentRegistry.cpp`).
+2. If it is a flow element, add its `Q(ΔP)` law to `evalBranch`
+   (`src/components/hydraulic/BranchLaw.cpp`) and list it in `isBranch`.
+
+The palette, property editor, hierarchy, save/load, and solver pick it up
+automatically — no GUI changes needed.
+
+## Validation
+
+`Help ▸ Validate Solver` (and the `validation_test` CTest) build a series+parallel
+orifice network whose flow and node pressures have a closed-form solution, and
+compare. Latest run: **max relative error ≈ 5e-10**, Newton converged in 6
+iterations.
+```
+Q: solver=0.0162478  analytic=0.0162478   (err 5.0e-10)
+```
