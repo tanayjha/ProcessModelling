@@ -2,14 +2,18 @@
 
 #include <QComboBox>
 #include <QFormLayout>
+#include <QFrame>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPushButton>
 #include <QScrollArea>
 #include <QWidget>
 
 #include "core/ComponentRegistry.h"
 #include "core/FluidLibrary.h"
 #include "core/Network.h"
+#include "gui/Equations.h"
+#include "gui/PlantData.h"
 
 namespace umpnap {
 
@@ -39,20 +43,32 @@ void PropertyEditor::rebuild() {
   form->addRow(new QLabel("<b>" + QString::fromStdString(comp_->type) + " #" +
                           QString::number(comp_->id) + "</b>"));
 
+  // Editable P&ID tag.
+  auto* tagEdit = new QLineEdit(QString::fromStdString(comp_->name), body_);
+  connect(tagEdit, &QLineEdit::editingFinished, this, [this, tagEdit]() {
+    if (comp_) comp_->name = tagEdit->text().toStdString();
+    emit edited();
+  });
+  form->addRow("Tag", tagEdit);
+
   // Fluid selector (generic property framework).
-  auto* fluidBox = new QComboBox(body_);
-  for (const auto& n : FluidLibrary::names())
-    fluidBox->addItem(QString::fromStdString(n));
-  fluidBox->setCurrentText(QString::fromStdString(comp_->fluid));
-  connect(fluidBox, &QComboBox::currentTextChanged, this,
-          [this](const QString& t) {
-            if (comp_) comp_->fluid = t.toStdString();
-            emit edited();
-          });
-  form->addRow("Fluid", fluidBox);
+  const ComponentDef* def = ComponentRegistry::instance().find(comp_->type);
+
+  // Fluid selector (only meaningful for hydraulic-domain components).
+  if (def && def->domain == Domain::Hydraulic) {
+    auto* fluidBox = new QComboBox(body_);
+    for (const auto& n : FluidLibrary::names())
+      fluidBox->addItem(QString::fromStdString(n));
+    fluidBox->setCurrentText(QString::fromStdString(comp_->fluid));
+    connect(fluidBox, &QComboBox::currentTextChanged, this,
+            [this](const QString& t) {
+              if (comp_) comp_->fluid = t.toStdString();
+              emit edited();
+            });
+    form->addRow("Fluid", fluidBox);
+  }
 
   // Parameters from the registry schema (with units).
-  const ComponentDef* def = ComponentRegistry::instance().find(comp_->type);
   if (def) {
     for (const auto& ps : def->params) {
       auto* edit = new QLineEdit(body_);
@@ -71,6 +87,31 @@ void PropertyEditor::rebuild() {
         label += "  [" + QString::fromStdString(ps.unit) + "]";
       form->addRow(label, edit);
     }
+  }
+
+  // Pump head-flow curve editor.
+  if (comp_->type == "Pump") {
+    auto* curveBtn = new QPushButton("Edit Head Curve…", body_);
+    connect(curveBtn, &QPushButton::clicked, this, [this]() {
+      if (!comp_) return;
+      CurveEditorDialog dlg(comp_, "head", "Q [m3/s]", "H [m]", this);
+      if (dlg.exec() == QDialog::Accepted) emit edited();
+    });
+    form->addRow("Head curve", curveBtn);
+  }
+
+  // Governing equations for this library model.
+  QString eq = equationText(comp_->type);
+  if (!eq.isEmpty()) {
+    auto* divider = new QFrame(body_);
+    divider->setFrameShape(QFrame::HLine);
+    form->addRow(divider);
+    form->addRow(new QLabel("<b>Governing equations</b>"));
+    auto* eqLabel = new QLabel(eq, body_);
+    eqLabel->setWordWrap(true);
+    eqLabel->setStyleSheet("font-family: monospace; color: #333;");
+    eqLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    form->addRow(eqLabel);
   }
 
   scroll->setWidget(body_);

@@ -47,3 +47,8 @@ if(Qt6_FOUND)
   add_executable(umpnap_trendcheck tools/trend_check.cpp)
   target_link_libraries(umpnap_trendcheck PRIVATE umpnap_gui)
 endif()
+
+if(Qt6_FOUND)
+  add_executable(umpnap_datasheet tools/datasheet_shot.cpp)
+  target_link_libraries(umpnap_datasheet PRIVATE umpnap_gui)
+endif()

@@ -28,6 +28,7 @@ class MainWindow : public QMainWindow {
   void runSteady();
   void runTransient();
   void runValidation();
+  void openPlantData();
   void about();
 
  private:

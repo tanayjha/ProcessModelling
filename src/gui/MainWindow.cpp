@@ -15,6 +15,7 @@
 #include "gui/DiagramScene.h"
 #include "gui/HierarchyDock.h"
 #include "gui/PaletteDock.h"
+#include "gui/PlantData.h"
 #include "gui/PropertyEditor.h"
 #include "gui/TrendDock.h"
 #include "solver/Validation.h"
@@ -71,6 +72,9 @@ void MainWindow::buildMenus() {
   file->addSeparator();
   file->addAction("&Quit", this, &QWidget::close);
 
+  QMenu* edit = menuBar()->addMenu("&Edit");
+  edit->addAction("&Plant Data...", this, &MainWindow::openPlantData);
+
   QMenu* run = menuBar()->addMenu("&Run");
   run->addAction("Run &Steady", this, &MainWindow::runSteady);
   run->addAction("Run &Transient...", this, &MainWindow::runTransient);
@@ -80,9 +84,21 @@ void MainWindow::buildMenus() {
   help->addAction("&About", this, &MainWindow::about);
 
   QToolBar* tb = addToolBar("Main");
+  tb->addAction("Plant Data", this, &MainWindow::openPlantData);
   tb->addAction("Steady", this, &MainWindow::runSteady);
   tb->addAction("Transient", this, &MainWindow::runTransient);
   tb->addAction("Validate", this, &MainWindow::runValidation);
+}
+
+void MainWindow::openPlantData() {
+  PlantDataDialog dlg(&net_, this);
+  connect(&dlg, &PlantDataDialog::dataChanged, this, [this]() {
+    scene_->update();
+    hierarchy_->refresh(&net_);
+  });
+  dlg.exec();
+  scene_->update();
+  hierarchy_->refresh(&net_);
 }
 
 void MainWindow::newProject() {

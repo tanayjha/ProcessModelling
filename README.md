@@ -15,22 +15,43 @@ heavy-water loop — Tank → Pump → Pipe → Heat Exchanger → Valve → Tan
 
 ## What works today
 
-- **Drag-and-drop P&ID editor** (Qt `QGraphicsView`): place components, drag to
-  move, drag port-to-port to wire, `Delete` to remove. Connection validation
-  rejects inlet→inlet / outlet→outlet.
+- **Drag-and-drop P&ID editor** (Qt `QGraphicsView`) with **standard P&ID symbols**
+  per type (Boundary = circle, Pump = circle+impeller, Valve = bowtie, Tank =
+  cylinder with live level, Orifice = plate, Pipe = flanged spool, HX = shell +
+  serpentine, instruments = ISA bubbles). Place, drag to move, port-to-port wire,
+  `Delete` to remove. Connection validation rejects inlet→inlet / outlet→outlet.
+- **Editable P&ID tags** on every component (e.g. `P-101`, `FCV-203`), shown on the
+  symbol and saved with the project. Build as many diagrams as you like with your
+  own naming convention.
+- **Plant Data datasheet** (`Edit ▸ Plant Data…`): one tab per component type, a
+  table of your tagged instances against their design fields. Edit any cell —
+  changes apply immediately and the next solve reflects them, so transient response
+  tracks your plant data.
+- **Detailed, equation-referenced models** with engineering design data: Pipe
+  (Darcy-Weisbach + minor losses, ID/OD/roughness/tuning), Valve (IEC 60534 Kv with
+  linear/equal-%/quick-open characteristic), Orifice (ISO 5167), Pump (head curve
+  fitted from measured points or rated/shutoff datasheet, affinity laws),
+  Heat Exchanger (shell-and-tube tube-side). Every law is heavily commented in
+  `src/components/hydraulic/BranchLaw.cpp`; full write-up in
+  [`docs/EQUATIONS.md`](EQUATIONS.md); summary shown live in the Properties dock.
+- **Pump head–flow curve editor**: enter measured `(Q,H)` points; a least-squares
+  quadratic (in-tree LU) drives the model.
 - **Hydraulic solver**: nodal pressure formulation, Newton-Raphson with a dense LU
   linear solver, mass conservation at every node. Steady-state and transient
   (explicit-Euler tank-level integration).
 - **Generic fluid property package**: Light Water, Heavy Water (D2O), Oil, Air,
-  Helium, Nitrogen. The *same* Pipe/Pump/Valve adapts to the selected fluid — no
+  Helium, Nitrogen. The *same* component adapts to the selected fluid — no
   hardcoded fluid constants.
-- **Plugin component library** (hydraulic): Boundary, Tank, Pipe, Valve, Orifice,
-  Pump, Junction, Heat Exchanger. Palette and property editor are generated from
-  the registry.
-- **Property editor**, **model-hierarchy browser**, **trend plots** (`QPainter`),
-  **CSV export**, and full **project save/load** (`.umpnap` JSON).
+- **Expanded plugin library**: Boundary, Tank, Pipe, Valve, Orifice, Pump, Junction,
+  Heat Exchanger (hydraulic) plus Transmitter, Actuator, Controller (instrument
+  symbols; not yet solve-coupled). Palette, property editor, and datasheet are all
+  generated from the registry.
+- **Property editor**, **model-hierarchy browser**, **trend plots** (`QPainter`,
+  per-series auto-scale), **CSV export**, and full **project save/load** (`.umpnap`).
 - **In-app solver validation**: `Help ▸ Validate Solver` runs a series+parallel
   network with a closed-form answer and reports the error (matches to ~5e-10).
+
+![Plant Data datasheet](docs/umpnap_plantdata.png)
 
 ## What is stubbed (later phases)
 
