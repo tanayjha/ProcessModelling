@@ -39,8 +39,9 @@ class ComponentItem : public QGraphicsItem {
 
   Component* comp_;
   std::vector<PortVis> ports_;
-  double w_ = 144.0;
-  double h_ = 64.0;
+  double w_ = 104.0;       // footprint width
+  double h_ = 92.0;        // footprint height (glyph + caption)
+  double glyphH_ = 58.0;   // height of the symbol glyph region
 };
 
 // A wire between two component ports.

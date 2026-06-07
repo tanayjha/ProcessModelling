@@ -2,6 +2,7 @@
 
 #include <QFont>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPen>
 #include <cmath>
 
@@ -12,21 +13,118 @@ namespace umpnap {
 namespace {
 QColor portColor(PortRole r) {
   switch (r) {
-    case PortRole::Inlet: return QColor(46, 160, 67);    // green
-    case PortRole::Outlet: return QColor(207, 60, 60);   // red
-    case PortRole::Bidirectional: return QColor(56, 120, 220);  // blue
+    case PortRole::Inlet: return QColor(46, 160, 67);          // green
+    case PortRole::Outlet: return QColor(207, 60, 60);         // red
+    case PortRole::Bidirectional: return QColor(56, 120, 220); // blue
   }
   return Qt::gray;
 }
-QColor domainColor(Domain d) {
-  switch (d) {
-    case Domain::Hydraulic: return QColor(220, 235, 250);
-    case Domain::Gas: return QColor(245, 240, 220);
-    case Domain::Thermal: return QColor(250, 225, 220);
-    case Domain::Electrical: return QColor(235, 245, 225);
-    case Domain::Control: return QColor(235, 230, 245);
+
+// Draw the standard P&ID symbol for a component type inside rect g.
+void drawSymbol(QPainter* p, const std::string& type, const Component& c,
+                const QRectF& g) {
+  p->setRenderHint(QPainter::Antialiasing, true);
+  QPen line(QColor(40, 40, 40));
+  line.setWidth(2);
+  p->setPen(line);
+  p->setBrush(QColor(255, 255, 255));
+
+  const double cx = g.center().x(), cy = g.center().y();
+  const double r = std::min(g.width(), g.height()) / 2.0 - 2.0;
+
+  if (type == "Boundary") {
+    // Source/sink: circle.
+    p->drawEllipse(QPointF(cx, cy), r, r);
+
+  } else if (type == "Tank") {
+    // Vertical cylinder with a liquid level line.
+    QRectF body(cx - r, g.top() + 2, 2 * r, g.height() - 4);
+    double ry = std::min(8.0, body.height() / 4);
+    p->drawRoundedRect(body, ry, ry);
+    double lvl = c.param("level");
+    double h = std::max(0.001, c.param("height"));
+    double frac = std::min(1.0, lvl / h);
+    double yLine = body.bottom() - frac * (body.height() - 4) - 2;
+    QPen blue(QColor(56, 120, 220));
+    blue.setWidth(2);
+    p->setPen(blue);
+    p->drawLine(QPointF(body.left() + 2, yLine), QPointF(body.right() - 2, yLine));
+    p->fillRect(QRectF(body.left() + 2, yLine, body.width() - 4,
+                       body.bottom() - yLine - 1),
+                QColor(56, 120, 220, 40));
+
+  } else if (type == "Pump") {
+    // Centrifugal pump: circle with an impeller triangle pointing to outlet.
+    p->drawEllipse(QPointF(cx, cy), r, r);
+    QPolygonF tri;
+    tri << QPointF(cx - r * 0.4, cy - r * 0.55)
+        << QPointF(cx - r * 0.4, cy + r * 0.55) << QPointF(cx + r * 0.7, cy);
+    p->setBrush(QColor(220, 220, 220));
+    p->drawPolygon(tri);
+
+  } else if (type == "Pipe") {
+    // Pipe spool: two parallel run lines with flange ticks at each end.
+    double off = std::min(8.0, r * 0.5);
+    p->drawLine(QPointF(g.left(), cy - off), QPointF(g.right(), cy - off));
+    p->drawLine(QPointF(g.left(), cy + off), QPointF(g.right(), cy + off));
+    p->drawLine(QPointF(g.left() + 6, cy - off - 4), QPointF(g.left() + 6, cy + off + 4));
+    p->drawLine(QPointF(g.right() - 6, cy - off - 4), QPointF(g.right() - 6, cy + off + 4));
+
+  } else if (type == "Valve") {
+    // Bowtie (two triangles meeting at the stem centre).
+    QPolygonF bow;
+    bow << QPointF(g.left() + 2, cy - r) << QPointF(cx, cy)
+        << QPointF(g.left() + 2, cy + r);
+    p->drawPolygon(bow);
+    QPolygonF bow2;
+    bow2 << QPointF(g.right() - 2, cy - r) << QPointF(cx, cy)
+         << QPointF(g.right() - 2, cy + r);
+    p->drawPolygon(bow2);
+
+  } else if (type == "Orifice") {
+    // Pipe run with a thin plate (gap) across it.
+    p->drawLine(QPointF(g.left(), cy), QPointF(g.right(), cy));
+    QPen plate(QColor(40, 40, 40));
+    plate.setWidth(3);
+    p->setPen(plate);
+    p->drawLine(QPointF(cx, cy - r), QPointF(cx, cy - r * 0.25));
+    p->drawLine(QPointF(cx, cy + r * 0.25), QPointF(cx, cy + r));
+
+  } else if (type == "HeatExchanger") {
+    // Shell (rounded rect) with an internal tube serpentine.
+    QRectF shell(g.left() + 2, cy - r, g.width() - 4, 2 * r);
+    p->drawRoundedRect(shell, 6, 6);
+    QPainterPath path;
+    double x0 = shell.left() + 6, x1 = shell.right() - 6;
+    path.moveTo(x0, cy);
+    int seg = 4;
+    for (int i = 0; i <= seg; ++i) {
+      double x = x0 + (x1 - x0) * i / seg;
+      double y = cy + ((i % 2 == 0) ? -r * 0.5 : r * 0.5);
+      path.lineTo(x, y);
+    }
+    p->setBrush(Qt::NoBrush);
+    p->drawPath(path);
+
+  } else if (type == "Junction") {
+    p->setBrush(QColor(40, 40, 40));
+    p->drawEllipse(QPointF(cx, cy), 5, 5);
+
+  } else if (type == "Transmitter" || type == "Controller") {
+    // ISA instrument bubble: circle with a horizontal mid-line (field mount).
+    p->drawEllipse(QPointF(cx, cy), r, r);
+    p->drawLine(QPointF(cx - r, cy), QPointF(cx + r, cy));
+
+  } else if (type == "Actuator") {
+    // Diaphragm actuator: dome on a short stem.
+    QRectF dome(cx - r * 0.8, g.top() + 2, r * 1.6, r);
+    p->drawChord(dome, 0, 180 * 16);
+    p->drawLine(QPointF(cx, dome.bottom()), QPointF(cx, g.bottom() - 2));
+
+  } else {
+    // Fallback: rounded rectangle.
+    p->drawRoundedRect(g.adjusted(2, 2, -2, -2), 6, 6);
   }
-  return QColor(235, 235, 235);
 }
 }  // namespace
 
@@ -41,6 +139,7 @@ ComponentItem::ComponentItem(Component* c) : comp_(c) {
 
 void ComponentItem::layoutPorts() {
   ports_.clear();
+  const double gh = glyphH_;
   std::vector<int> inlets, outlets, bidir;
   for (int i = 0; i < (int)comp_->ports.size(); ++i) {
     switch (comp_->ports[i].role) {
@@ -56,13 +155,10 @@ void ComponentItem::layoutPorts() {
       PortVis pv;
       pv.name = port.name;
       pv.role = port.role;
-      if (bottom) {
-        double x = w_ * (k + 1.0) / (n + 1.0);
-        pv.local = QPointF(x, h_);
-      } else {
-        double y = h_ * (k + 1.0) / (n + 1.0);
-        pv.local = QPointF(xLocal, y);
-      }
+      if (bottom)
+        pv.local = QPointF(w_ * (k + 1.0) / (n + 1.0), gh);
+      else
+        pv.local = QPointF(xLocal, gh * (k + 1.0) / (n + 1.0));
       ports_.push_back(pv);
     }
   };
@@ -76,29 +172,42 @@ QRectF ComponentItem::boundingRect() const {
 }
 
 void ComponentItem::paint(QPainter* p, const QStyleOptionGraphicsItem*, QWidget*) {
-  QRectF body(0, 0, w_, h_);
-  p->setRenderHint(QPainter::Antialiasing, true);
-  QPen border(isSelected() ? QColor(20, 20, 20) : QColor(90, 90, 90));
-  border.setWidth(isSelected() ? 3 : 1);
-  p->setPen(border);
-  p->setBrush(domainColor(comp_->domain));
-  p->drawRoundedRect(body, 8, 8);
+  // Selection halo.
+  if (isSelected()) {
+    QPen halo(QColor(20, 90, 200));
+    halo.setWidth(2);
+    halo.setStyle(Qt::DashLine);
+    p->setPen(halo);
+    p->setBrush(Qt::NoBrush);
+    p->drawRoundedRect(QRectF(-4, -4, w_ + 8, h_ + 8), 6, 6);
+  }
 
+  // Symbol glyph in the upper region.
+  QRectF glyph(0, 0, w_, glyphH_);
+  drawSymbol(p, comp_->type, *comp_, glyph);
+
+  // Tag (P&ID name) + type/fluid caption below the glyph.
   p->setPen(QColor(20, 20, 20));
   QFont f = p->font();
   f.setBold(true);
+  f.setPointSizeF(f.pointSizeF() + 0.5);
   p->setFont(f);
-  p->drawText(body.adjusted(6, 4, -6, -h_ / 2),
-              Qt::AlignLeft | Qt::AlignTop, QString::fromStdString(comp_->type));
-  f.setBold(false);
-  p->setFont(f);
-  QRectF infoRect = body.adjusted(6, h_ / 2 - 6, -14, -4);
-  QString info = "#" + QString::number(comp_->id) + "  " +
-                 QString::fromStdString(comp_->fluid);
-  QString elided = p->fontMetrics().elidedText(info, Qt::ElideRight,
-                                               (int)infoRect.width());
-  p->drawText(infoRect, Qt::AlignLeft | Qt::AlignTop, elided);
+  QString tag = QString::fromStdString(comp_->name.empty() ? comp_->type
+                                                           : comp_->name);
+  p->drawText(QRectF(0, glyphH_, w_, 16), Qt::AlignHCenter | Qt::AlignTop, tag);
 
+  f.setBold(false);
+  f.setPointSizeF(f.pointSizeF() - 1.0);
+  p->setFont(f);
+  QString sub = QString::fromStdString(comp_->type);
+  if (comp_->domain == Domain::Hydraulic)
+    sub += " · " + QString::fromStdString(comp_->fluid);
+  QString elided =
+      p->fontMetrics().elidedText(sub, Qt::ElideRight, (int)w_ - 4);
+  p->drawText(QRectF(0, glyphH_ + 15, w_, 14), Qt::AlignHCenter | Qt::AlignTop,
+              elided);
+
+  // Port handles.
   for (const auto& pv : ports_) {
     p->setBrush(portColor(pv.role));
     p->setPen(QPen(Qt::black, 1));
@@ -117,7 +226,8 @@ int ComponentItem::portAt(const QPointF& scenePos) const {
 }
 
 QPointF ComponentItem::portScenePos(int idx) const {
-  if (idx < 0 || idx >= (int)ports_.size()) return mapToScene(QPointF(w_ / 2, h_ / 2));
+  if (idx < 0 || idx >= (int)ports_.size())
+    return mapToScene(QPointF(w_ / 2, glyphH_ / 2));
   return mapToScene(ports_[idx].local);
 }
 
