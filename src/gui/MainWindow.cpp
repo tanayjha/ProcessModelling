@@ -1,14 +1,17 @@
 #include "gui/MainWindow.h"
 
 #include <QAction>
+#include <QComboBox>
 #include <QFileDialog>
 #include <QGraphicsView>
 #include <QInputDialog>
+#include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPainter>
 #include <QStatusBar>
 #include <QToolBar>
+#include <memory>
 
 #include "core/ComponentRegistry.h"
 #include "core/Project.h"
@@ -17,6 +20,7 @@
 #include "gui/PaletteDock.h"
 #include "gui/PlantData.h"
 #include "gui/PropertyEditor.h"
+#include "gui/SimController.h"
 #include "gui/TrendDock.h"
 #include "solver/Validation.h"
 
@@ -44,9 +48,15 @@ MainWindow::MainWindow() {
   addDockWidget(Qt::BottomDockWidgetArea, trends_);
   resizeDocks({trends_}, {300}, Qt::Vertical);
 
+  sim_ = new SimController(&net_, &results_, this);
+  connect(sim_, &SimController::updated, this, &MainWindow::onSimUpdated);
+  connect(sim_, &SimController::modeChanged, this, &MainWindow::onSimModeChanged);
+
   connect(palette_, &PaletteDock::typeSelected, scene_, &DiagramScene::setArmedType);
-  connect(scene_, &DiagramScene::componentSelected, properties_,
-          &PropertyEditor::showComponent);
+  connect(scene_, &DiagramScene::componentSelected, this, [this](Component* c) {
+    selected_ = c;
+    properties_->showComponent(c);
+  });
   connect(scene_, &DiagramScene::networkChanged, this,
           [this]() { hierarchy_->refresh(&net_); });
   connect(properties_, &PropertyEditor::edited, this, [this]() {
@@ -57,9 +67,10 @@ MainWindow::MainWindow() {
           &DiagramScene::selectComponent);
 
   buildMenus();
+  buildSimToolbar();
   statusBar()->showMessage(
       "Ready. Click a palette item, then click the canvas to place it. "
-      "Drag port-to-port to connect.");
+      "Drag port-to-port to connect. Use the Simulation toolbar to run.");
 }
 
 void MainWindow::buildMenus() {
@@ -68,26 +79,129 @@ void MainWindow::buildMenus() {
   file->addAction("&Open...", this, &MainWindow::openProject);
   file->addAction("&Save...", this, &MainWindow::saveProject_);
   file->addSeparator();
+  file->addAction("Save &Initial Condition...", this,
+                  &MainWindow::saveInitialCondition);
+  file->addAction("Load Initial &Condition...", this,
+                  &MainWindow::loadInitialCondition);
+  file->addSeparator();
   file->addAction("&Export Results CSV...", this, &MainWindow::exportCsv);
   file->addSeparator();
   file->addAction("&Quit", this, &QWidget::close);
 
   QMenu* edit = menuBar()->addMenu("&Edit");
   edit->addAction("&Plant Data...", this, &MainWindow::openPlantData);
+  edit->addAction("&Clone Selected", QKeySequence("Ctrl+D"), this,
+                  &MainWindow::cloneSelected);
 
-  QMenu* run = menuBar()->addMenu("&Run");
-  run->addAction("Run &Steady", this, &MainWindow::runSteady);
-  run->addAction("Run &Transient...", this, &MainWindow::runTransient);
+  QMenu* sim = menuBar()->addMenu("&Simulation");
+  sim->addAction("&Initialize (Steady)", this,
+                 [this]() { sim_->initializeSteady(); });
+  sim->addAction("&Run", this, [this]() { sim_->start(); });
+  sim->addAction("&Pause / Freeze", this, [this]() { sim_->pause(); });
+  sim->addAction("Single &Step", this, [this]() { sim_->singleStep(); });
+  sim->addAction("Rese&t", this, [this]() { sim_->reset(); });
+  sim->addSeparator();
+  sim->addAction("Save Snapshot", this, [this]() { sim_->saveSnapshot(); });
+  sim->addAction("Restore Snapshot", this, [this]() { sim_->restoreSnapshot(); });
+  sim->addAction("Set &Timestep...", this, [this]() {
+    bool ok = false;
+    double dt = QInputDialog::getDouble(this, "Timestep", "dt (s):", sim_->dt(),
+                                        1e-6, 1e6, 4, &ok);
+    if (ok) sim_->setDt(dt);
+  });
 
   QMenu* help = menuBar()->addMenu("&Help");
   help->addAction("&Validate Solver", this, &MainWindow::runValidation);
   help->addAction("&About", this, &MainWindow::about);
+}
 
-  QToolBar* tb = addToolBar("Main");
+void MainWindow::buildSimToolbar() {
+  QToolBar* tb = addToolBar("Simulation");
   tb->addAction("Plant Data", this, &MainWindow::openPlantData);
-  tb->addAction("Steady", this, &MainWindow::runSteady);
-  tb->addAction("Transient", this, &MainWindow::runTransient);
+  tb->addSeparator();
+  tb->addAction("⏮ Init", this, [this]() { sim_->initializeSteady(); });
+  tb->addAction("▶ Run", this, [this]() { sim_->start(); });
+  tb->addAction("⏸ Pause", this, [this]() { sim_->pause(); });
+  tb->addAction("⏭ Step", this, [this]() { sim_->singleStep(); });
+  tb->addAction("⟲ Reset", this, [this]() { sim_->reset(); });
+  tb->addSeparator();
+  tb->addWidget(new QLabel(" Speed ", tb));
+  auto* speed = new QComboBox(tb);
+  speed->addItems({"1x", "2x", "5x", "10x", "20x"});
+  connect(speed, &QComboBox::currentTextChanged, this, [this](const QString& s) {
+    sim_->setSpeed(s.left(s.size() - 1).toInt());
+  });
+  tb->addWidget(speed);
+  tb->addSeparator();
+  tb->addAction("Snapshot", this, [this]() { sim_->saveSnapshot(); });
+  tb->addAction("Restore", this, [this]() { sim_->restoreSnapshot(); });
   tb->addAction("Validate", this, &MainWindow::runValidation);
+  tb->addSeparator();
+  clock_ = new QLabel("  t = 0.0 s   [Stopped]  ", tb);
+  tb->addWidget(clock_);
+}
+
+void MainWindow::onSimUpdated() {
+  scene_->updateRuntime(results_);
+  trends_->liveUpdate();
+  if (clock_) {
+    const char* m = sim_->mode() == SimController::Running ? "Running"
+                    : sim_->mode() == SimController::Paused ? "Paused"
+                                                            : "Stopped";
+    clock_->setText(QString("  t = %1 s   [%2]  ")
+                        .arg(sim_->time(), 0, 'f', 1)
+                        .arg(m));
+  }
+}
+
+void MainWindow::onSimModeChanged() {
+  onSimUpdated();
+  const char* m = sim_->mode() == SimController::Running ? "Running"
+                  : sim_->mode() == SimController::Paused ? "Paused (inspect/edit allowed)"
+                                                          : "Stopped";
+  statusBar()->showMessage(QString("Simulation: %1").arg(m));
+}
+
+void MainWindow::cloneSelected() {
+  if (!selected_) {
+    statusBar()->showMessage("Select a component to clone.");
+    return;
+  }
+  auto c = ComponentRegistry::instance().create(selected_->type);
+  if (!c) return;
+  c->fluid = selected_->fluid;
+  c->params = selected_->params;
+  c->curves = selected_->curves;
+  c->x = selected_->x + 40;
+  c->y = selected_->y + 40;
+  net_.addComponent(std::move(c));  // gets a fresh id + tag
+  scene_->rebuildFromNetwork();
+  hierarchy_->refresh(&net_);
+  statusBar()->showMessage("Cloned " + QString::fromStdString(selected_->name));
+}
+
+void MainWindow::saveInitialCondition() {
+  QString path = QFileDialog::getSaveFileName(this, "Save Initial Condition",
+                                              QString(), "Initial Condition (*.ic)");
+  if (path.isEmpty()) return;
+  if (!path.endsWith(".ic")) path += ".ic";
+  if (saveProject(net_, path.toStdString()))
+    statusBar()->showMessage("Saved initial condition " + path);
+}
+
+void MainWindow::loadInitialCondition() {
+  QString path = QFileDialog::getOpenFileName(this, "Load Initial Condition",
+                                              QString(), "Initial Condition (*.ic)");
+  if (path.isEmpty()) return;
+  if (!loadProject(net_, path.toStdString())) {
+    QMessageBox::warning(this, "Load IC", "Failed to load initial condition.");
+    return;
+  }
+  scene_->rebuildFromNetwork();
+  hierarchy_->refresh(&net_);
+  sim_->captureInitial();
+  sim_->initializeSteady();
+  statusBar()->showMessage("Loaded initial condition " + path);
 }
 
 void MainWindow::openPlantData() {
@@ -120,8 +234,10 @@ void MainWindow::openProject() {
     return;
   }
   scene_->rebuildFromNetwork();
+  scene_->clearRuntime();
   hierarchy_->refresh(&net_);
   properties_->showComponent(nullptr);
+  sim_->captureInitial();
   statusBar()->showMessage("Opened " + path);
 }
 
@@ -147,47 +263,6 @@ void MainWindow::exportCsv() {
     return;
   }
   statusBar()->showMessage("Exported results to " + path);
-}
-
-void MainWindow::runSteady() {
-  std::string err = net_.validate();
-  if (!err.empty()) {
-    QMessageBox::warning(this, "Cannot solve", QString::fromStdString(err));
-    return;
-  }
-  SolveReport rep = solver_.runSteady(net_, results_);
-  trends_->refreshKeys();
-  QString msg = QString("Steady solve: %1  (iters=%2, residual=%3)")
-                    .arg(QString::fromStdString(rep.message))
-                    .arg(rep.iterations)
-                    .arg(rep.residual, 0, 'e', 2);
-  statusBar()->showMessage(msg);
-  if (!rep.converged)
-    QMessageBox::warning(this, "Alarm: solve did not converge", msg);
-}
-
-void MainWindow::runTransient() {
-  std::string err = net_.validate();
-  if (!err.empty()) {
-    QMessageBox::warning(this, "Cannot solve", QString::fromStdString(err));
-    return;
-  }
-  bool ok = false;
-  double dt = QInputDialog::getDouble(this, "Transient", "Timestep dt (s):", 1.0,
-                                      1e-6, 1e6, 4, &ok);
-  if (!ok) return;
-  int steps = QInputDialog::getInt(this, "Transient", "Number of steps:", 30, 1,
-                                   100000, 1, &ok);
-  if (!ok) return;
-  SolveReport rep = solver_.runTransient(net_, results_, dt, steps);
-  scene_->update();
-  hierarchy_->refresh(&net_);
-  trends_->refreshKeys();
-  statusBar()->showMessage(
-      QString("Transient: %1 steps of dt=%2 s. Final: %3")
-          .arg(steps)
-          .arg(dt)
-          .arg(QString::fromStdString(rep.message)));
 }
 
 void MainWindow::runValidation() {

@@ -15,6 +15,11 @@ class SolverManager {
   // Returns the report from the final step.
   SolveReport runTransient(Network& net, Results& out, double dt, int steps);
 
+  // Advance exactly one transient cycle at time t: solve the steady balance then
+  // integrate inventory (tank levels) by dt. Used by the interactive simulation
+  // engine (Run / Single-Step) so one tick == one solver cycle.
+  SolveReport stepTransient(Network& net, Results& out, double dt, double t);
+
   HydraulicSolver& hydraulic() { return hydraulic_; }
 
  private:

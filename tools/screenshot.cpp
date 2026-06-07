@@ -7,7 +7,9 @@
 #include "core/ComponentRegistry.h"
 #include "core/Network.h"
 #include "core/Project.h"
+#include "core/Results.h"
 #include "gui/DiagramScene.h"
+#include "solver/SolverManager.h"
 
 using namespace umpnap;
 
@@ -18,6 +20,7 @@ int main(int argc, char** argv) {
   Network net;
   const char* in = (argc > 1) ? argv[1] : "examples/loop.umpnap";
   const char* out = (argc > 2) ? argv[2] : "docs/umpnap_canvas.png";
+  int steps = (argc > 3) ? atoi(argv[3]) : 0;  // run sim steps for runtime overlay
   if (!loadProject(net, in)) {
     qWarning("failed to load %s", in);
     return 1;
@@ -25,7 +28,17 @@ int main(int argc, char** argv) {
 
   DiagramScene scene(&net);
   scene.rebuildFromNetwork();
-  QRectF r = scene.itemsBoundingRect().adjusted(-30, -30, 30, 30);
+
+  // Optionally run the simulation and push live values onto the diagram.
+  Results res;
+  if (steps > 0) {
+    SolverManager mgr;
+    mgr.runSteady(net, res);
+    for (int s = 1; s <= steps; ++s) mgr.stepTransient(net, res, 1.0, s);
+    scene.updateRuntime(res);
+  }
+
+  QRectF r = scene.itemsBoundingRect().adjusted(-30, -30, 40, 40);
 
   QImage img((int)r.width(), (int)r.height(), QImage::Format_ARGB32);
   img.fill(Qt::white);

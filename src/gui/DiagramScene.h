@@ -11,6 +11,7 @@ namespace umpnap {
 
 class ComponentItem;
 class ConnectionItem;
+class Results;
 
 // Interactive P&ID scene: place from palette, drag to move, port-drag to wire.
 class DiagramScene : public QGraphicsScene {
@@ -22,6 +23,10 @@ class DiagramScene : public QGraphicsScene {
   void rebuildFromNetwork();   // recreate all items from net_
   void refreshConnections();   // reposition all wires
   void selectComponent(int id);
+
+  // Runtime monitoring: push live values onto symbols and flow arrows onto wires.
+  void updateRuntime(const Results& res);
+  void clearRuntime();
 
  signals:
   void componentSelected(umpnap::Component* c);  // nullptr when cleared

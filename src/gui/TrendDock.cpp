@@ -63,6 +63,15 @@ void TrendDock::refreshKeys() {
   updatePlot();
 }
 
+void TrendDock::liveUpdate() {
+  // First data: populate the list and auto-select. Afterwards just replot so the
+  // user's signal selection is preserved as the trends extend in time.
+  if (list_->count() != (int)results_->keys().size())
+    refreshKeys();
+  else
+    updatePlot();
+}
+
 void TrendDock::updatePlot() {
   std::vector<TrendWidget::Series> series;
   int ci = 0;

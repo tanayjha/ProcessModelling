@@ -5,10 +5,58 @@
 #include <QKeyEvent>
 #include <QPen>
 
+#include "components/hydraulic/BranchLaw.h"
 #include "core/ComponentRegistry.h"
+#include "core/Results.h"
 #include "gui/DiagramItems.h"
+#include "solver/NodeGraph.h"
 
 namespace umpnap {
+
+namespace {
+// Live readout string for a component from the latest results.
+QString runtimeText(const Component* c, const NodeGraph& g, const Results& res) {
+  auto pressureBar = [&](const std::string& port) -> QString {
+    int n = g.nodeOf(c->id, port);
+    if (n < 0) return QString();
+    double pa = res.latest("node." + std::to_string(n) + ".pressure");
+    if (pa == 0.0) return QString();
+    return QString("P=%1 bar").arg(pa / 1e5, 0, 'f', 2);
+  };
+  QString flowStr;
+  double q = res.latest("comp." + std::to_string(c->id) + ".flow");
+  if (isBranch(c->type))
+    flowStr = QString("Q=%1 m³/s").arg(q, 0, 'g', 3);
+
+  if (c->type == "Tank" || c->type == "PressurizedTank")
+    return QString("L=%1 m\n%2").arg(c->param("level"), 0, 'f', 2).arg(pressureBar("p"));
+  if (c->type == "Boundary") return pressureBar("p");
+  if (c->type == "Pump") {
+    double h = res.latest("comp." + std::to_string(c->id) + ".head");
+    return QString("%1\nH=%2 m").arg(flowStr).arg(h, 0, 'f', 1);
+  }
+  if (c->type == "Valve" || c->type == "Damper")
+    return QString("%1\n%2% open").arg(flowStr).arg(c->param("position") * 100.0, 0, 'f', 0);
+  if (isBranch(c->type)) return flowStr;
+  if (c->domain != Domain::Hydraulic) return QString();
+  return pressureBar(c->ports.empty() ? "" : c->ports.front().name);
+}
+
+// Signed flow from the A endpoint toward the B endpoint of a connection.
+double connectionFlow(const Connection& cn, const Network& net, const Results& res) {
+  const Component* a = net.component(cn.compA);
+  const Component* b = net.component(cn.compB);
+  if (a && isBranch(a->type)) {
+    double q = res.latest("comp." + std::to_string(a->id) + ".flow");
+    return (cn.portA == "out") ? q : -q;  // out -> flow leaves A toward B
+  }
+  if (b && isBranch(b->type)) {
+    double q = res.latest("comp." + std::to_string(b->id) + ".flow");
+    return (cn.portB == "in") ? q : -q;  // in -> flow enters B from A
+  }
+  return 0.0;
+}
+}  // namespace
 
 DiagramScene::DiagramScene(Network* net, QObject* parent)
     : QGraphicsScene(parent), net_(net) {
@@ -55,6 +103,19 @@ void DiagramScene::rebuildFromNetwork() {
 
 void DiagramScene::refreshConnections() {
   for (auto* w : conns_) w->updatePosition();
+}
+
+void DiagramScene::updateRuntime(const Results& res) {
+  NodeGraph g = buildNodeGraph(*net_);
+  for (auto* it : items_) it->setRuntime(runtimeText(it->comp(), g, res));
+  const auto& conns = net_->connections();
+  for (size_t i = 0; i < conns_.size() && i < conns.size(); ++i)
+    conns_[i]->setFlow(connectionFlow(conns[i], *net_, res));
+}
+
+void DiagramScene::clearRuntime() {
+  for (auto* it : items_) it->setRuntime("");
+  for (auto* w : conns_) w->setFlow(0.0);
 }
 
 ComponentItem* DiagramScene::portHitTest(const QPointF& scenePos, int& portIdx) const {

@@ -207,12 +207,28 @@ void ComponentItem::paint(QPainter* p, const QStyleOptionGraphicsItem*, QWidget*
   p->drawText(QRectF(0, glyphH_ + 15, w_, 14), Qt::AlignHCenter | Qt::AlignTop,
               elided);
 
+  // Live runtime readout (during a simulation run).
+  if (!runtime_.isEmpty()) {
+    p->setPen(QColor(20, 110, 40));
+    QFont mf = p->font();
+    mf.setPointSizeF(mf.pointSizeF() - 0.5);
+    p->setFont(mf);
+    p->drawText(QRectF(-6, glyphH_ + 29, w_ + 12, 28),
+                Qt::AlignHCenter | Qt::AlignTop, runtime_);
+  }
+
   // Port handles.
   for (const auto& pv : ports_) {
     p->setBrush(portColor(pv.role));
     p->setPen(QPen(Qt::black, 1));
     p->drawEllipse(pv.local, 5, 5);
   }
+}
+
+void ComponentItem::setRuntime(const QString& s) {
+  if (runtime_ == s) return;
+  runtime_ = s;
+  update();
 }
 
 int ComponentItem::portAt(const QPointF& scenePos) const {
@@ -270,6 +286,36 @@ ConnectionItem::ConnectionItem(ComponentItem* a, int pa, ComponentItem* b, int p
 
 void ConnectionItem::updatePosition() {
   setLine(QLineF(a_->portScenePos(pa_), b_->portScenePos(pb_)));
+}
+
+void ConnectionItem::setFlow(double signedFlow) {
+  flow_ = signedFlow;
+  hasFlow_ = true;
+  update();
+}
+
+void ConnectionItem::paint(QPainter* p, const QStyleOptionGraphicsItem* o,
+                           QWidget* w) {
+  QGraphicsLineItem::paint(p, o, w);
+  if (!hasFlow_ || std::fabs(flow_) < 1e-9) return;
+
+  // Draw a direction arrowhead at the line midpoint. The arrow points from A to
+  // B when flow_ > 0, and from B to A when flow_ < 0.
+  QLineF ln = line();
+  QPointF mid = (ln.p1() + ln.p2()) / 2.0;
+  QPointF dir = (flow_ >= 0.0) ? (ln.p2() - ln.p1()) : (ln.p1() - ln.p2());
+  double len = std::hypot(dir.x(), dir.y());
+  if (len < 1e-6) return;
+  dir /= len;
+  QPointF norm(-dir.y(), dir.x());
+  double a = 7.0;  // arrow size
+  QPolygonF head;
+  head << mid + dir * a << mid - dir * a + norm * a * 0.7
+       << mid - dir * a - norm * a * 0.7;
+  p->setRenderHint(QPainter::Antialiasing, true);
+  p->setBrush(QColor(30, 110, 200));
+  p->setPen(Qt::NoPen);
+  p->drawPolygon(head);
 }
 
 }  // namespace umpnap

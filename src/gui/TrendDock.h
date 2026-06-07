@@ -13,7 +13,8 @@ class TrendDock : public QDockWidget {
   Q_OBJECT
  public:
   explicit TrendDock(Results* results, QWidget* parent = nullptr);
-  void refreshKeys();  // repopulate the signal list from results
+  void refreshKeys();   // repopulate the signal list from results
+  void liveUpdate();    // during a run: populate once, then just replot
 
  private slots:
   void updatePlot();
