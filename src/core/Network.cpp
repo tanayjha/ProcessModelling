@@ -84,16 +84,20 @@ void Network::clear() {
 std::string Network::validate() const {
   if (comps_.empty()) return "Network is empty.";
 
+  auto isAnchor = [](const std::string& t) {
+    return t == "Boundary" || t == "Tank" || t == "PressurizedTank" ||
+           t == "AirReceiver";
+  };
   bool hasAnchor = false;
   for (const auto& c : comps_)
-    if (c->type == "Boundary" || c->type == "Tank") hasAnchor = true;
+    if (isAnchor(c->type)) hasAnchor = true;
   if (!hasAnchor)
     return "Network needs at least one Boundary or Tank to anchor pressure.";
 
-  // Every Inlet/Outlet port must be connected. Anchors (Boundary/Tank) and
-  // Junction extra ports may be left open.
+  // Every Inlet/Outlet port must be connected. Anchors and bidirectional
+  // (junction/header) ports may be left open.
   for (const auto& c : comps_) {
-    bool anchor = (c->type == "Boundary" || c->type == "Tank");
+    bool anchor = isAnchor(c->type);
     for (const auto& port : c->ports) {
       if (anchor) continue;
       if (port.role == PortRole::Bidirectional) continue;  // junction-like

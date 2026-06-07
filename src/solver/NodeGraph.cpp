@@ -86,7 +86,7 @@ NodeGraph buildNodeGraph(const Network& net) {
       int n = g.portNode[{c->id, "p"}];
       g.fixed[n] = true;
       g.fixedP[n] = c->param("pressure");
-    } else if (c->type == "Tank") {
+    } else if (isTankType(c->type)) {
       int n = g.portNode[{c->id, "p"}];
       FluidProps f = FluidLibrary::props(c->fluid);
       g.fixed[n] = true;

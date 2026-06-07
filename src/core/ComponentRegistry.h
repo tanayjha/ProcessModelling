@@ -13,6 +13,7 @@ struct ComponentDef {
   std::string tagPrefix;  // default P&ID tag prefix, e.g. "P" -> "P-3"
   std::vector<Port> ports;
   std::vector<ParamSpec> params;
+  std::string defaultFluid = "Light Water";  // working fluid for new instances
 };
 
 // Plugin-style registry. Adding a component type = register one ComponentDef.

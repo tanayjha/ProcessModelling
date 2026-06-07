@@ -36,7 +36,8 @@ void drawSymbol(QPainter* p, const std::string& type, const Component& c,
     // Source/sink: circle.
     p->drawEllipse(QPointF(cx, cy), r, r);
 
-  } else if (type == "Tank") {
+  } else if (type == "Tank" || type == "PressurizedTank" ||
+             type == "AirReceiver") {
     // Vertical cylinder with a liquid level line.
     QRectF body(cx - r, g.top() + 2, 2 * r, g.height() - 4);
     double ry = std::min(8.0, body.height() / 4);
@@ -53,8 +54,9 @@ void drawSymbol(QPainter* p, const std::string& type, const Component& c,
                        body.bottom() - yLine - 1),
                 QColor(56, 120, 220, 40));
 
-  } else if (type == "Pump") {
-    // Centrifugal pump: circle with an impeller triangle pointing to outlet.
+  } else if (type == "Pump" || type == "Fan" || type == "Blower" ||
+             type == "Compressor") {
+    // Rotodynamic machine: circle with an impeller triangle toward the outlet.
     p->drawEllipse(QPointF(cx, cy), r, r);
     QPolygonF tri;
     tri << QPointF(cx - r * 0.4, cy - r * 0.55)
@@ -62,15 +64,15 @@ void drawSymbol(QPainter* p, const std::string& type, const Component& c,
     p->setBrush(QColor(220, 220, 220));
     p->drawPolygon(tri);
 
-  } else if (type == "Pipe") {
-    // Pipe spool: two parallel run lines with flange ticks at each end.
+  } else if (type == "Pipe" || type == "Duct") {
+    // Pipe/duct spool: two parallel run lines with flange ticks at each end.
     double off = std::min(8.0, r * 0.5);
     p->drawLine(QPointF(g.left(), cy - off), QPointF(g.right(), cy - off));
     p->drawLine(QPointF(g.left(), cy + off), QPointF(g.right(), cy + off));
     p->drawLine(QPointF(g.left() + 6, cy - off - 4), QPointF(g.left() + 6, cy + off + 4));
     p->drawLine(QPointF(g.right() - 6, cy - off - 4), QPointF(g.right() - 6, cy + off + 4));
 
-  } else if (type == "Valve") {
+  } else if (type == "Valve" || type == "Damper") {
     // Bowtie (two triangles meeting at the stem centre).
     QPolygonF bow;
     bow << QPointF(g.left() + 2, cy - r) << QPointF(cx, cy)
@@ -106,20 +108,70 @@ void drawSymbol(QPainter* p, const std::string& type, const Component& c,
     p->setBrush(Qt::NoBrush);
     p->drawPath(path);
 
-  } else if (type == "Junction") {
-    p->setBrush(QColor(40, 40, 40));
-    p->drawEllipse(QPointF(cx, cy), 5, 5);
+  } else if (type == "Junction" || type == "Header") {
+    if (type == "Header") {
+      // Manifold: long horizontal cylinder.
+      QRectF body(g.left() + 2, cy - r * 0.5, g.width() - 4, r);
+      p->drawRoundedRect(body, r * 0.4, r * 0.4);
+    } else {
+      p->setBrush(QColor(40, 40, 40));
+      p->drawEllipse(QPointF(cx, cy), 5, 5);
+    }
 
-  } else if (type == "Transmitter" || type == "Controller") {
-    // ISA instrument bubble: circle with a horizontal mid-line (field mount).
-    p->drawEllipse(QPointF(cx, cy), r, r);
-    p->drawLine(QPointF(cx - r, cy), QPointF(cx + r, cy));
+  } else if (type == "Filter" || type == "Strainer") {
+    // Diamond with a mesh hatch.
+    QPolygonF dia;
+    dia << QPointF(cx, cy - r) << QPointF(cx + r, cy) << QPointF(cx, cy + r)
+        << QPointF(cx - r, cy);
+    p->drawPolygon(dia);
+    p->drawLine(QPointF(cx - r * 0.5, cy), QPointF(cx + r * 0.5, cy));
+    p->drawLine(QPointF(cx, cy - r * 0.5), QPointF(cx, cy + r * 0.5));
+
+  } else if (type == "Transformer") {
+    // Two overlapping windings.
+    double rr = r * 0.62;
+    p->drawEllipse(QPointF(cx, cy - rr * 0.5), rr, rr);
+    p->drawEllipse(QPointF(cx, cy + rr * 0.5), rr, rr);
+
+  } else if (type == "Busbar") {
+    // Thick horizontal bar.
+    QPen bar(QColor(40, 40, 40));
+    bar.setWidth(5);
+    p->setPen(bar);
+    p->drawLine(QPointF(g.left() + 2, cy), QPointF(g.right() - 2, cy));
+
+  } else if (type == "Breaker") {
+    // Switch contact in a square.
+    p->drawRect(QRectF(cx - r, cy - r, 2 * r, 2 * r));
+    p->drawLine(QPointF(cx - r, cy), QPointF(cx - r * 0.2, cy));
+    p->drawLine(QPointF(cx - r * 0.2, cy), QPointF(cx + r * 0.6, cy - r * 0.7));
+    p->drawLine(QPointF(cx + r * 0.2, cy), QPointF(cx + r, cy));
 
   } else if (type == "Actuator") {
     // Diaphragm actuator: dome on a short stem.
     QRectF dome(cx - r * 0.8, g.top() + 2, r * 1.6, r);
     p->drawChord(dome, 0, 180 * 16);
     p->drawLine(QPointF(cx, dome.bottom()), QPointF(cx, g.bottom() - 2));
+
+  } else if (c.domain == Domain::Electrical || c.domain == Domain::Instrument ||
+             c.domain == Domain::Control) {
+    // Generic ISA-style bubble (Grid/Generator/Motor/Load, Transmitter, Switch,
+    // RTD, Gauge, Controller, Timer, Logic, ...) with a short type code inside.
+    p->drawEllipse(QPointF(cx, cy), r, r);
+    if (c.domain == Domain::Instrument || c.domain == Domain::Control)
+      p->drawLine(QPointF(cx - r, cy), QPointF(cx + r, cy));  // field mount line
+    static const std::pair<const char*, const char*> codes[] = {
+        {"Grid", "~"},   {"Generator", "G"},    {"Motor", "M"},
+        {"ElectricalLoad", "L"}, {"Cable", "—"}, {"Transmitter", "T"},
+        {"Switch", "S"}, {"RTD", "TE"},         {"Gauge", "I"},
+        {"Controller", "PID"}, {"Timer", "TMR"}, {"Logic", "&"}};
+    QString code = QString::fromStdString(type.substr(0, 1));
+    for (auto& kv : codes)
+      if (type == kv.first) { code = kv.second; break; }
+    QFont f = p->font();
+    f.setBold(true);
+    p->setFont(f);
+    p->drawText(QRectF(cx - r, cy - r * 0.5, 2 * r, r), Qt::AlignCenter, code);
 
   } else {
     // Fallback: rounded rectangle.

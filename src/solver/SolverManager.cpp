@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <string>
 
+#include "components/hydraulic/BranchLaw.h"
 #include "core/Results.h"
 #include "solver/NodeGraph.h"
 
@@ -20,7 +21,7 @@ SolveReport SolverManager::stepTransient(Network& net, Results& out, double dt,
   // Integrate tank levels from net inflow at each tank node (explicit Euler).
   NodeGraph g = buildNodeGraph(net);
   for (auto& c : net.components()) {
-    if (c->type != "Tank" && c->type != "PressurizedTank") continue;
+    if (!isTankType(c->type)) continue;
     int tankNode = g.nodeOf(c->id, "p");
     double qnet = 0.0;  // m^3/s into the tank
     for (const auto& br : g.branches) {

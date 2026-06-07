@@ -1,0 +1,18 @@
+{
+  "nextId": 7,
+  "components": [
+    {"id": 1, "type": "Boundary", "name": "BND-1", "domain": "Hydraulic", "x": 60, "y": 200, "fluid": "Air", "params": {"elevation": 0, "pressure": 101300}},
+    {"id": 2, "type": "Blower", "name": "BLW-2", "domain": "Hydraulic", "x": 240, "y": 80, "fluid": "Air", "params": {"efficiency": 0.7, "ratedFlow": 1, "ratedHead": 80, "shutoffHead": 100, "speedRatio": 1}},
+    {"id": 3, "type": "Duct", "name": "DCT-3", "domain": "Hydraulic", "x": 430, "y": 80, "fluid": "Air", "params": {"ID": 0.3, "OD": 0.31, "length": 10, "minorK": 0, "roughness": 9e-05, "tuning": 1}},
+    {"id": 4, "type": "Damper", "name": "DMP-4", "domain": "Hydraulic", "x": 620, "y": 80, "fluid": "Air", "params": {"Kv": 500, "characteristic": 0, "position": 0.7, "rangeability": 30}},
+    {"id": 5, "type": "Filter", "name": "FL-5", "domain": "Hydraulic", "x": 430, "y": 320, "fluid": "Air", "params": {"ratedDP": 20000, "ratedFlow": 0.05}},
+    {"id": 6, "type": "Boundary", "name": "BND-6", "domain": "Hydraulic", "x": 60, "y": 320, "fluid": "Air", "params": {"elevation": 0, "pressure": 101300}}
+  ],
+  "connections": [
+    {"compA": 1, "portA": "p", "compB": 2, "portB": "in"},
+    {"compA": 2, "portA": "out", "compB": 3, "portB": "in"},
+    {"compA": 3, "portA": "out", "compB": 4, "portB": "in"},
+    {"compA": 4, "portA": "out", "compB": 5, "portB": "in"},
+    {"compA": 5, "portA": "out", "compB": 6, "portB": "p"}
+  ]
+}

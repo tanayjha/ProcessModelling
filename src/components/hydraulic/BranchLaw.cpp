@@ -31,8 +31,16 @@ constexpr double kG = 9.80665;  // standard gravity [m/s^2]
 }  // namespace
 
 bool isBranch(const std::string& type) {
+  // Hydraulic primitives plus pneumatic/filter aliases that reuse the same laws.
   return type == "Pipe" || type == "Valve" || type == "Orifice" ||
-         type == "Pump" || type == "HeatExchanger";
+         type == "Pump" || type == "HeatExchanger" || type == "Duct" ||
+         type == "Damper" || type == "Fan" || type == "Blower" ||
+         type == "Compressor" || type == "Filter" || type == "Strainer";
+}
+
+bool isTankType(const std::string& type) {
+  // Inventory-bearing vessels that pin a node pressure from their level.
+  return type == "Tank" || type == "PressurizedTank" || type == "AirReceiver";
 }
 
 // ----------------------------------------------------------------------------
@@ -164,6 +172,17 @@ double orificeK(const Component& c, const FluidProps& f) {
 //  The thermal duty (not solved in Phase 1) would be  Qdot = U * A_s * LMTD,
 //  with surface area A_s = N * pi * d_o * L_tube.
 //  Ref: tube-side dP (Kern); LMTD method for Qdot.
+// ---- FILTER / STRAINER ----------------------------------------------------
+//  Fixed quadratic resistance from a datasheet clean-element point: a pressure
+//  drop `ratedDP` at flow `ratedFlow`.  K = ratedDP / ratedFlow^2.
+//  Ref: manufacturer clean-element ΔP curve (fouling not modelled here).
+double filterK(const Component& c) {
+  double Qr = c.param("ratedFlow");
+  double dPr = c.param("ratedDP");
+  if (Qr <= 0.0) return 0.0;
+  return dPr / (Qr * Qr);
+}
+
 double hxK(const Component& c, double dP, const FluidProps& f) {
   double L = c.param("tubeLength");
   double di = c.param("tubeID");
@@ -260,16 +279,21 @@ BranchEval pumpEval(const Component& c, double dP, const FluidProps& f) {
 }  // namespace
 
 BranchEval evalBranch(const Component& c, double dP, const FluidProps& f) {
-  if (c.type == "Pump") return pumpEval(c, dP, f);
+  // Active pressure-rise devices (pump and its pneumatic cousins).
+  if (c.type == "Pump" || c.type == "Fan" || c.type == "Blower" ||
+      c.type == "Compressor")
+    return pumpEval(c, dP, f);
   double K = 0.0;
-  if (c.type == "Pipe")
+  if (c.type == "Pipe" || c.type == "Duct")
     K = pipeK(c, dP, f);
-  else if (c.type == "Valve")
+  else if (c.type == "Valve" || c.type == "Damper")
     K = valveK(c, f);
   else if (c.type == "Orifice")
     K = orificeK(c, f);
   else if (c.type == "HeatExchanger")
     K = hxK(c, dP, f);
+  else if (c.type == "Filter" || c.type == "Strainer")
+    K = filterK(c);
   return resistanceFlow(dP, K);
 }
 

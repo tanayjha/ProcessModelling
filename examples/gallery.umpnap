@@ -1,0 +1,28 @@
+{
+  "nextId": 22,
+  "components": [
+    {"id": 1, "type": "PressurizedTank", "name": "PTK-1", "domain": "Hydraulic", "x": 40, "y": 40, "fluid": "Light Water", "params": {"diameter": 2, "elevation": 0, "height": 6, "level": 3, "p_top": 500000}},
+    {"id": 2, "type": "AirReceiver", "name": "ARC-2", "domain": "Hydraulic", "x": 190, "y": 40, "fluid": "Air", "params": {"diameter": 1, "elevation": 0, "height": 2.5, "level": 0, "p_top": 700000}},
+    {"id": 3, "type": "Header", "name": "HDR-3", "domain": "Hydraulic", "x": 340, "y": 40, "fluid": "Light Water", "params": {}},
+    {"id": 4, "type": "Filter", "name": "FL-4", "domain": "Hydraulic", "x": 490, "y": 40, "fluid": "Light Water", "params": {"ratedDP": 20000, "ratedFlow": 0.05}},
+    {"id": 5, "type": "Strainer", "name": "ST-5", "domain": "Hydraulic", "x": 640, "y": 40, "fluid": "Light Water", "params": {"ratedDP": 10000, "ratedFlow": 0.05}},
+    {"id": 6, "type": "Transformer", "name": "TX-6", "domain": "Electrical", "x": 40, "y": 180, "fluid": "Light Water", "params": {"impedance": 6, "rating": 1000, "ratio": 26.5}},
+    {"id": 7, "type": "Busbar", "name": "BUS-7", "domain": "Electrical", "x": 190, "y": 180, "fluid": "Light Water", "params": {"voltage": 415}},
+    {"id": 8, "type": "Breaker", "name": "CB-8", "domain": "Electrical", "x": 340, "y": 180, "fluid": "Light Water", "params": {"rating": 630, "state": 1}},
+    {"id": 9, "type": "Generator", "name": "GEN-9", "domain": "Electrical", "x": 490, "y": 180, "fluid": "Light Water", "params": {"pf": 0.8, "rating": 1000, "voltage": 415}},
+    {"id": 10, "type": "Grid", "name": "GRID-10", "domain": "Electrical", "x": 640, "y": 180, "fluid": "Light Water", "params": {"frequency": 50, "voltage": 11000}},
+    {"id": 11, "type": "Motor", "name": "M-11", "domain": "Electrical", "x": 40, "y": 320, "fluid": "Light Water", "params": {"efficiency": 0.92, "rating": 75, "voltage": 415}},
+    {"id": 12, "type": "ElectricalLoad", "name": "LD-12", "domain": "Electrical", "x": 190, "y": 320, "fluid": "Light Water", "params": {"pf": 0.85, "power": 50}},
+    {"id": 13, "type": "Cable", "name": "W-13", "domain": "Electrical", "x": 340, "y": 320, "fluid": "Light Water", "params": {"area": 95, "length": 50}},
+    {"id": 14, "type": "Transmitter", "name": "XT-14", "domain": "Instrument", "x": 490, "y": 320, "fluid": "Light Water", "params": {"measVar": 0, "rangeMax": 100, "rangeMin": 0}},
+    {"id": 15, "type": "Switch", "name": "XS-15", "domain": "Instrument", "x": 640, "y": 320, "fluid": "Light Water", "params": {"deadband": 1, "measVar": 0, "setpoint": 50}},
+    {"id": 16, "type": "RTD", "name": "TE-16", "domain": "Instrument", "x": 40, "y": 460, "fluid": "Light Water", "params": {"rangeMax": 200, "rangeMin": 0}},
+    {"id": 17, "type": "Gauge", "name": "GI-17", "domain": "Instrument", "x": 190, "y": 460, "fluid": "Light Water", "params": {"rangeMax": 16, "rangeMin": 0}},
+    {"id": 18, "type": "Controller", "name": "IC-18", "domain": "Control", "x": 340, "y": 460, "fluid": "Light Water", "params": {"Td": 0, "Ti": 10, "gain": 1, "setpoint": 50}},
+    {"id": 19, "type": "Timer", "name": "TMR-19", "domain": "Control", "x": 490, "y": 460, "fluid": "Light Water", "params": {"preset": 5}},
+    {"id": 20, "type": "Logic", "name": "LGC-20", "domain": "Control", "x": 640, "y": 460, "fluid": "Light Water", "params": {"function": 0}},
+    {"id": 21, "type": "Actuator", "name": "ACT-21", "domain": "Instrument", "x": 40, "y": 600, "fluid": "Light Water", "params": {"failPosition": 0, "strokeTime": 5, "type": 0}}
+  ],
+  "connections": [
+  ]
+}

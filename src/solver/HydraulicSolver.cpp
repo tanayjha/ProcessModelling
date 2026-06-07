@@ -147,7 +147,7 @@ SolveReport HydraulicSolver::solveSteady(Network& net, Results& out, double t) {
   }
 
   for (const auto& c : net.components()) {
-    if (c->type == "Tank")
+    if (isTankType(c->type))
       out.record("comp." + std::to_string(c->id) + ".level", t, c->param("level"));
   }
 

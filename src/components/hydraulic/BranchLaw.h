@@ -13,9 +13,13 @@ struct BranchEval {
   double dQ_ddP = 0.0;
 };
 
-// True for two-port flow elements (Pipe, Valve, Orifice, Pump, HeatExchanger).
-// Boundary/Tank/Junction are nodes, not branches.
+// True for two-port flow elements (Pipe, Valve, Orifice, Pump, HeatExchanger,
+// and the pneumatic/filter aliases). Boundary/Tank/Junction are nodes.
 bool isBranch(const std::string& type);
+
+// True for inventory-bearing vessels (Tank, PressurizedTank, AirReceiver) that
+// pin a node pressure from their liquid level.
+bool isTankType(const std::string& type);
 
 // dP = P_in - P_out (Pa). Returns flow from in to out.
 BranchEval evalBranch(const Component& c, double dP, const FluidProps& f);
