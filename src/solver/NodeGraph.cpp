@@ -29,10 +29,14 @@ struct UnionFind {
 NodeGraph buildNodeGraph(const Network& net) {
   NodeGraph g;
 
-  // Assign every (component, port) a dense index.
+  // Assign every (component, port) a dense index. Only hydraulic-domain
+  // components form pressure nodes; instrumentation/control symbols are not
+  // part of the hydraulic solve and are skipped so they cannot create
+  // dangling (equation-less) free nodes.
   std::map<std::pair<int, std::string>, int> portIndex;
   std::vector<std::pair<int, std::string>> portList;
   for (const auto& c : net.components()) {
+    if (c->domain != Domain::Hydraulic) continue;
     for (const auto& p : c->ports) {
       portIndex[{c->id, p.name}] = (int)portList.size();
       portList.push_back({c->id, p.name});

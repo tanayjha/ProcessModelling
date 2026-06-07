@@ -161,16 +161,33 @@ bool saveProject(const Network& net, const std::string& path) {
   for (size_t ci = 0; ci < comps.size(); ++ci) {
     const Component& c = *comps[ci];
     f << "    {\"id\": " << c.id << ", \"type\": \"" << esc(c.type)
-      << "\", \"domain\": \"" << domainName(c.domain) << "\", \"x\": " << c.x
-      << ", \"y\": " << c.y << ", \"fluid\": \"" << esc(c.fluid)
-      << "\", \"params\": {";
+      << "\", \"name\": \"" << esc(c.name) << "\", \"domain\": \""
+      << domainName(c.domain) << "\", \"x\": " << c.x << ", \"y\": " << c.y
+      << ", \"fluid\": \"" << esc(c.fluid) << "\", \"params\": {";
     bool first = true;
     for (const auto& kv : c.params) {
       if (!first) f << ", ";
       first = false;
       f << "\"" << esc(kv.first) << "\": " << kv.second;
     }
-    f << "}}";
+    f << "}";
+    // Optional curve data (e.g. pump head curve) as arrays of [x, y] pairs.
+    if (!c.curves.empty()) {
+      f << ", \"curves\": {";
+      bool firstCurve = true;
+      for (const auto& cv : c.curves) {
+        if (!firstCurve) f << ", ";
+        firstCurve = false;
+        f << "\"" << esc(cv.first) << "\": [";
+        for (size_t i = 0; i < cv.second.size(); ++i) {
+          if (i) f << ", ";
+          f << "[" << cv.second[i].first << ", " << cv.second[i].second << "]";
+        }
+        f << "]";
+      }
+      f << "}";
+    }
+    f << "}";
     if (ci + 1 < comps.size()) f << ",";
     f << "\n";
   }
@@ -217,6 +234,7 @@ bool loadProject(Network& net, const std::string& path) {
         c->type = type;
       }
       int id = (int)cj.numOr("id", 0);
+      c->name = cj.strOr("name", "");
       c->domain = domainFromName(cj.strOr("domain", "Hydraulic"));
       c->x = cj.numOr("x", 0);
       c->y = cj.numOr("y", 0);
@@ -225,6 +243,20 @@ bool loadProject(Network& net, const std::string& path) {
       if (params && params->type == JValue::Obj)
         for (const auto& kv : params->obj)
           if (kv.second.type == JValue::Num) c->params[kv.first] = kv.second.num;
+      // Curve data: { "head": [[Q,H], ...], ... }
+      const JValue* curves = cj.get("curves");
+      if (curves && curves->type == JValue::Obj) {
+        for (const auto& cv : curves->obj) {
+          if (cv.second.type != JValue::Arr) continue;
+          std::vector<std::pair<double, double>> pts;
+          for (const auto& pair : cv.second.arr) {
+            if (pair.type == JValue::Arr && pair.arr.size() >= 2 &&
+                pair.arr[0].type == JValue::Num && pair.arr[1].type == JValue::Num)
+              pts.push_back({pair.arr[0].num, pair.arr[1].num});
+          }
+          c->curves[cv.first] = std::move(pts);
+        }
+      }
       net.setNextId(id);
       net.addComponent(std::move(c));  // assigns id == id, bumps nextId
       if (id > maxId) maxId = id;

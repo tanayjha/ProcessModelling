@@ -1,5 +1,7 @@
 #include "core/Network.h"
 
+#include "core/ComponentRegistry.h"
+
 namespace umpnap {
 
 const char* domainName(Domain d) {
@@ -9,6 +11,7 @@ const char* domainName(Domain d) {
     case Domain::Thermal: return "Thermal";
     case Domain::Electrical: return "Electrical";
     case Domain::Control: return "Control";
+    case Domain::Instrument: return "Instrument";
   }
   return "Hydraulic";
 }
@@ -18,12 +21,20 @@ Domain domainFromName(const std::string& s) {
   if (s == "Thermal") return Domain::Thermal;
   if (s == "Electrical") return Domain::Electrical;
   if (s == "Control") return Domain::Control;
+  if (s == "Instrument") return Domain::Instrument;
   return Domain::Hydraulic;
 }
 
 int Network::addComponent(std::unique_ptr<Component> c) {
   int id = nextId_++;
   c->id = id;
+  // Assign a default P&ID tag (e.g. "P-3") if the caller did not set one.
+  if (c->name.empty()) {
+    const ComponentDef* def = ComponentRegistry::instance().find(c->type);
+    std::string prefix =
+        (def && !def->tagPrefix.empty()) ? def->tagPrefix : c->type;
+    c->name = prefix + "-" + std::to_string(id);
+  }
   comps_.push_back(std::move(c));
   return id;
 }

@@ -1,12 +1,33 @@
+// ============================================================================
+//  UMPNAP hydraulic component models  --  branch constitutive laws
+// ----------------------------------------------------------------------------
+//  A "branch" is a two-port flow element. Given the pressure drop across it,
+//  dP = P_in - P_out  [Pa], each model returns the volumetric flow Q [m^3/s]
+//  from inlet to outlet, together with dQ/d(dP) for the Newton-Raphson Jacobian.
+//
+//  Sign convention:  dP > 0  =>  flow from in -> out  =>  Q > 0.
+//
+//  Most passive elements are quadratic resistances of the form
+//        dP = K * Q * |Q|            (turbulent, inertia-dominated loss)
+//  so that   Q = sign(dP) * sqrt(|dP| / K).
+//  The only difference between pipe / valve / orifice / heat-exchanger is HOW
+//  the resistance coefficient K is computed from the design data. The pump is
+//  active and instead imposes a head-vs-flow characteristic.
+//
+//  Every model below documents its governing equation and a reference.
+// ============================================================================
 #include "components/hydraulic/BranchLaw.h"
 
+#include <algorithm>
 #include <cmath>
+
+#include "core/CurveFit.h"
 
 namespace umpnap {
 
 namespace {
 constexpr double kPi = 3.14159265358979323846;
-constexpr double kG = 9.80665;  // m/s^2
+constexpr double kG = 9.80665;  // standard gravity [m/s^2]
 }  // namespace
 
 bool isBranch(const std::string& type) {
@@ -14,12 +35,19 @@ bool isBranch(const std::string& type) {
          type == "Pump" || type == "HeatExchanger";
 }
 
+// ----------------------------------------------------------------------------
+//  Generic quadratic-resistance branch:  dP = K * Q * |Q|.
+//  Inverted:  Q = sign(dP) * sqrt(|dP| / K),   dQ/d(dP) = 1 / (2*sqrt(K*|dP|)).
+//  Near dP = 0 the derivative -> infinity, so a small linear core (|dP| < eps)
+//  is used to keep the Jacobian finite and the Newton solve well-conditioned.
+// ----------------------------------------------------------------------------
 BranchEval resistanceFlow(double dP, double K, double eps) {
   BranchEval r;
-  if (K <= 0.0) return r;  // no resistance defined -> no flow contribution
+  if (K <= 0.0) return r;  // undefined resistance -> contributes no flow
   double adp = std::fabs(dP);
   if (adp < eps) {
-    // Linear region: Q = m*dP, chosen continuous with sqrt branch at |dP|=eps.
+    // Continuous linear core: Q = m*dP with m chosen so Q matches the sqrt
+    // branch in magnitude at |dP| = eps.
     double m = 1.0 / std::sqrt(K * eps);
     r.Q = m * dP;
     r.dQ_ddP = m;
@@ -31,10 +59,17 @@ BranchEval resistanceFlow(double dP, double K, double eps) {
   return r;
 }
 
+// ----------------------------------------------------------------------------
+//  Darcy friction factor f.
+//    Laminar  (Re < 2300):     f = 64 / Re                 (Hagen-Poiseuille)
+//    Turbulent:                Colebrook-White, approximated explicitly by the
+//                              Swamee-Jain correlation:
+//        f = 0.25 / [ log10( e/(3.7 D) + 5.74 / Re^0.9 ) ]^2
+//  Ref: Swamee & Jain (1976); White, "Fluid Mechanics".
+// ----------------------------------------------------------------------------
 double frictionFactor(double Re, double relRoughness) {
   if (Re < 1.0) Re = 1.0;
   if (Re < 2300.0) return 64.0 / Re;
-  // Swamee-Jain explicit approximation of Colebrook.
   double t = relRoughness / 3.7 + 5.74 / std::pow(Re, 0.9);
   double denom = std::log10(t);
   return 0.25 / (denom * denom);
@@ -42,64 +77,183 @@ double frictionFactor(double Re, double relRoughness) {
 
 namespace {
 
-// Pipe resistance coefficient K such that dP = K*Q*|Q|, evaluated at the current
-// pressure drop (friction depends on Re, which depends on Q -> the outer Newton
-// loop re-evaluates this each iteration as dP changes).
+// ---- PIPE -----------------------------------------------------------------
+//  Darcy-Weisbach pressure drop with additional lumped minor (fitting) losses:
+//        dP = ( f * L/D + sum_K_minor ) * (rho * v^2 / 2) * tuning
+//  with mean velocity v = Q / A,  A = pi D^2 / 4  (D = inner diameter ID).
+//  Written as dP = K * Q*|Q| gives
+//        K = ( f*L/D + Kminor ) * rho / (2 A^2) * tuning.
+//  Because f depends on Re(Q), K is re-evaluated at the current dP each Newton
+//  iteration (the outer loop converges f and Q together).
+//  Ref: Darcy-Weisbach equation; Crane TP-410 for minor-loss K factors.
 double pipeK(const Component& c, double dP, const FluidProps& f) {
   double L = c.param("length");
-  double D = c.param("diameter");
+  double D = c.param("ID");  // inner diameter
   double rough = c.param("roughness");
+  double Kminor = c.param("minorK");
+  double tuning = c.param("tuning");
+  if (tuning <= 0.0) tuning = 1.0;
   if (D <= 0.0) return 0.0;
   double A = kPi * D * D / 4.0;
-  // Estimate velocity/Re from a provisional turbulent guess to pick f.
-  // Use f from current dP estimate of Q with a fixed-point-friendly seed.
-  double fGuess = 0.02;
-  double K = fGuess * (L / D) * f.density / (2.0 * A * A);
-  // One refinement: estimate Q from current dP, recompute Re and f.
-  double q = std::sqrt(std::fabs(dP) / (K > 0 ? K : 1.0));
+
+  // Provisional flow estimate from the current dP to evaluate Re, then f.
+  double Kseed = 0.02 * (L / D) * f.density / (2.0 * A * A);
+  double q = std::sqrt(std::fabs(dP) / (Kseed > 0 ? Kseed : 1.0));
   double v = q / A;
   double Re = f.density * v * D / f.viscosity;
   double fr = frictionFactor(Re, rough / D);
-  return fr * (L / D) * f.density / (2.0 * A * A);
+  return (fr * L / D + Kminor) * f.density / (2.0 * A * A) * tuning;
 }
 
+// ---- VALVE ----------------------------------------------------------------
+//  Control-valve sizing by flow coefficient Kv (metric).  Definition:
+//        Q[m^3/h] = Kv * sqrt( dP[bar] / SG ),   SG = rho/rho_water.
+//  The installed coefficient depends on travel via the inherent characteristic
+//  phi(position):
+//        linear:           phi = x
+//        equal-percentage: phi = R^(x-1)          (R = rangeability)
+//        quick-opening:    phi = sqrt(x)
+//  so Kv_eff = Kv_rated * phi(position). Converting to SI and the K form
+//  dP = K * Q*|Q| (with dP in Pa, Q in m^3/s):
+//        K = (1e5 * rho/1000) * (3600 / Kv_eff)^2
+//  Ref: IEC 60534-2-1 (valve sizing); ISA control-valve handbook.
 double valveK(const Component& c, const FluidProps& f) {
   double Kv = c.param("Kv");
-  double pos = c.param("position");
-  if (pos < 1e-3) pos = 1e-3;  // nearly closed -> very high resistance
-  return (Kv / (pos * pos)) * f.density;
+  double x = std::clamp(c.param("position"), 0.0, 1.0);
+  double R = c.param("rangeability");
+  if (R < 1.1) R = 50.0;
+  int charType = (int)std::lround(c.param("characteristic"));
+
+  double phi;
+  switch (charType) {
+    case 0: phi = x; break;                       // linear
+    case 2: phi = std::sqrt(x); break;            // quick-opening
+    default: phi = std::pow(R, x - 1.0); break;   // equal-percentage
+  }
+  double Kv_eff = Kv * phi;
+  if (Kv_eff < 1e-6) Kv_eff = 1e-6;  // essentially closed -> huge resistance
+  double ratio = 3600.0 / Kv_eff;
+  return (1.0e5 * f.density / 1000.0) * ratio * ratio;
 }
 
+// ---- ORIFICE (metering plate) --------------------------------------------
+//  ISO 5167 thin-plate orifice. With bore d, pipe bore D, beta = d/D:
+//        Q = (Cd / sqrt(1 - beta^4)) * A_o * sqrt( 2 dP / rho )
+//  with A_o = pi d^2 / 4. Inverting to dP = K Q|Q|:
+//        K = (rho / 2) * (1 - beta^4) / (Cd^2 * A_o^2)
+//  Ref: ISO 5167-2; Bernoulli with discharge coefficient.
 double orificeK(const Component& c, const FluidProps& f) {
-  double bore = c.param("bore");
+  double d = c.param("bore");
+  double D = c.param("pipeID");
   double Cd = c.param("Cd");
-  double A = kPi * bore * bore / 4.0;
-  if (A <= 0.0 || Cd <= 0.0) return 0.0;
-  return f.density / (2.0 * Cd * Cd * A * A);
+  double Ao = kPi * d * d / 4.0;
+  if (Ao <= 0.0 || Cd <= 0.0) return 0.0;
+  double beta = (D > 0.0) ? d / D : 0.0;
+  double oneMinusB4 = 1.0 - beta * beta * beta * beta;
+  if (oneMinusB4 < 0.05) oneMinusB4 = 0.05;  // guard for beta -> 1
+  return (f.density / 2.0) * oneMinusB4 / (Cd * Cd * Ao * Ao);
 }
 
-double hxK(const Component& c, const FluidProps& f) {
-  return c.param("K_hx") * f.density;
+// ---- HEAT EXCHANGER (tube side, hydraulic) --------------------------------
+//  Shell-and-tube, tube-side pressure drop. Flow Q splits equally among
+//  N tubes, each carrying q = Q/N through bore d_i with effective length
+//  L_eff = L_tube * n_passes:
+//        dP = ( f * L_eff/d_i + Kminor ) * rho * v_t^2 / 2,  v_t = q / A_t
+//  Written as dP = K Q|Q| with A_t = pi d_i^2/4:
+//        K = ( f*L_eff/d_i + Kminor ) * rho / (2 (N A_t)^2)
+//  The thermal duty (not solved in Phase 1) would be  Qdot = U * A_s * LMTD,
+//  with surface area A_s = N * pi * d_o * L_tube.
+//  Ref: tube-side dP (Kern); LMTD method for Qdot.
+double hxK(const Component& c, double dP, const FluidProps& f) {
+  double L = c.param("tubeLength");
+  double di = c.param("tubeID");
+  double N = std::max(1.0, c.param("numTubes"));
+  double passes = std::max(1.0, c.param("numPasses"));
+  double rough = c.param("roughness");
+  double Kminor = c.param("minorK");
+  if (di <= 0.0) return 0.0;
+  double At = kPi * di * di / 4.0;
+  double Leff = L * passes;
+
+  // Estimate per-tube Re from current dP to pick f.
+  double Kseed = 0.02 * (Leff / di) * f.density / (2.0 * (N * At) * (N * At));
+  double q = std::sqrt(std::fabs(dP) / (Kseed > 0 ? Kseed : 1.0));
+  double vt = (q / N) / At;
+  double Re = f.density * vt * di / f.viscosity;
+  double fr = frictionFactor(Re, rough / di);
+  return (fr * Leff / di + Kminor) * f.density / (2.0 * (N * At) * (N * At));
 }
 
-// Pump: pressure rise ρg(H0 - a Q^2) = (P_out - P_in) = -dP.
-// => Q = sqrt(max((H0 + dP/(ρg)) / a, 0)).
+// ---- PUMP -----------------------------------------------------------------
+//  Centrifugal pump head-vs-flow characteristic  H(Q)  [m].
+//  Two sources of the curve, in priority order:
+//   1. If the component carries a "head" curve (>=3 points of (Q,H)), a
+//      least-squares quadratic is fitted:  H(Q) = a0 + a1 Q + a2 Q^2.
+//   2. Otherwise it is built from datasheet scalars: shutoff head H0 at Q=0
+//      and rated head Hr at rated flow Qr, as  H(Q) = H0 + ((Hr-H0)/Qr^2) Q^2
+//      (i.e. a1 = 0, a2 = (Hr-H0)/Qr^2 < 0).
+//  Variable-speed operation uses the affinity laws (Q ~ s, H ~ s^2). For a
+//  quadratic this maps to:  a0 -> s^2 a0,  a1 -> s a1,  a2 -> a2.
+//
+//  The pump raises outlet pressure, so dP = P_in - P_out = -rho g H(Q).
+//  Given dP we solve  H(Q) = -dP/(rho g) = H_t  for the operating flow:
+//        a2 Q^2 + a1 Q + (a0 - H_t) = 0.
+//  dQ/d(dP) follows by implicit differentiation:
+//        (2 a2 Q + a1) Q' = dH_t/d(dP) = -1/(rho g).
+//  Ref: pump affinity laws; manufacturer characteristic curves.
+void pumpCoeffs(const Component& c, double& a0, double& a1, double& a2) {
+  const auto* curve = c.curve("head");
+  std::vector<double> fit;
+  if (curve && curve->size() >= 3) fit = polyFit(*curve, 2);
+  if (fit.size() == 3) {
+    a0 = fit[0]; a1 = fit[1]; a2 = fit[2];
+  } else {
+    double H0 = c.param("shutoffHead");
+    double Hr = c.param("ratedHead");
+    double Qr = c.param("ratedFlow");
+    a0 = H0;
+    a1 = 0.0;
+    a2 = (Qr > 1e-9) ? (Hr - H0) / (Qr * Qr) : -1.0;
+  }
+  // Apply affinity scaling for the commanded speed ratio s.
+  double s = c.param("speedRatio");
+  if (s <= 0.0) s = 1.0;
+  a0 *= s * s;
+  a1 *= s;
+  // a2 unchanged under the affinity transform.
+}
+
 BranchEval pumpEval(const Component& c, double dP, const FluidProps& f) {
   BranchEval r;
-  double H0 = c.param("H0");
-  double a = c.param("a");
+  double a0, a1, a2;
+  pumpCoeffs(c, a0, a1, a2);
   double rg = f.density * kG;
-  if (a <= 0.0 || rg <= 0.0) return r;
-  double u = (H0 + dP / rg) / a;  // = Q^2
-  if (u <= 0.0) {
+  if (rg <= 0.0 || a2 == 0.0) return r;
+
+  double Ht = -dP / rg;  // required head for this pressure rise
+  // Solve a2 Q^2 + a1 Q + (a0 - Ht) = 0 for the physical (Q >= 0) root.
+  double cc = a0 - Ht;
+  double disc = a1 * a1 - 4.0 * a2 * cc;
+  if (disc < 0.0) {
+    // Operating point above shutoff (more head demanded than available):
+    // clamp to zero flow with a tiny slope to keep the Jacobian non-singular.
     r.Q = 0.0;
-    r.dQ_ddP = 1e-9;  // tiny slope keeps Jacobian non-singular
+    r.dQ_ddP = 1e-9;
     return r;
   }
-  double q = std::sqrt(u);
-  r.Q = q;
-  // dQ/ddP = (1/(2 sqrt(u))) * d u/ddP, du/ddP = 1/(rg*a).
-  r.dQ_ddP = (1.0 / (2.0 * q)) * (1.0 / (rg * a));
+  double sq = std::sqrt(disc);
+  double q1 = (-a1 + sq) / (2.0 * a2);
+  double q2 = (-a1 - sq) / (2.0 * a2);
+  // Choose the non-negative root on the operating branch (smaller Q wins when
+  // both are positive -- the stable left side of the down-opening parabola).
+  double Q = -1.0;
+  for (double cand : {q1, q2})
+    if (cand >= 0.0 && (Q < 0.0 || cand < Q)) Q = cand;
+  if (Q < 0.0) { r.Q = 0.0; r.dQ_ddP = 1e-9; return r; }
+
+  double slope = 2.0 * a2 * Q + a1;  // dH/dQ at the operating point
+  r.Q = Q;
+  r.dQ_ddP = (std::fabs(slope) > 1e-12) ? (-1.0 / (slope * rg)) : 1e-9;
   return r;
 }
 
@@ -115,7 +269,7 @@ BranchEval evalBranch(const Component& c, double dP, const FluidProps& f) {
   else if (c.type == "Orifice")
     K = orificeK(c, f);
   else if (c.type == "HeatExchanger")
-    K = hxK(c, f);
+    K = hxK(c, dP, f);
   return resistanceFlow(dP, K);
 }
 

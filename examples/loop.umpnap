@@ -1,11 +1,11 @@
 {
   "nextId": 6,
   "components": [
-    {"id": 1, "type": "Tank", "domain": "Hydraulic", "x": 80, "y": 240, "fluid": "Heavy Water (D2O)", "params": {"area": 3, "level": 4, "p_top": 101300}},
-    {"id": 2, "type": "Pump", "domain": "Hydraulic", "x": 300, "y": 80, "fluid": "Heavy Water (D2O)", "params": {"H0": 60, "a": 4000}},
-    {"id": 3, "type": "Pipe", "domain": "Hydraulic", "x": 540, "y": 80, "fluid": "Heavy Water (D2O)", "params": {"diameter": 0.2, "length": 25, "roughness": 4.5e-05}},
-    {"id": 4, "type": "HeatExchanger", "domain": "Hydraulic", "x": 540, "y": 240, "fluid": "Heavy Water (D2O)", "params": {"K_hx": 20000}},
-    {"id": 5, "type": "Valve", "domain": "Hydraulic", "x": 300, "y": 240, "fluid": "Heavy Water (D2O)", "params": {"Kv": 8, "position": 0.8}}
+    {"id": 1, "type": "Tank", "name": "TK-1", "domain": "Hydraulic", "x": 80, "y": 240, "fluid": "Heavy Water (D2O)", "params": {"diameter": 2.5, "elevation": 0, "height": 6, "level": 4, "p_top": 101300}},
+    {"id": 2, "type": "Pump", "name": "P-2", "domain": "Hydraulic", "x": 300, "y": 80, "fluid": "Heavy Water (D2O)", "params": {"efficiency": 0.75, "ratedFlow": 0.12, "ratedHead": 55, "shutoffHead": 70, "speedRatio": 1}},
+    {"id": 3, "type": "Pipe", "name": "L-3", "domain": "Hydraulic", "x": 540, "y": 80, "fluid": "Heavy Water (D2O)", "params": {"ID": 0.2, "OD": 0.114, "length": 25, "minorK": 0, "roughness": 4.5e-05, "tuning": 1}},
+    {"id": 4, "type": "HeatExchanger", "name": "HX-4", "domain": "Hydraulic", "x": 540, "y": 240, "fluid": "Heavy Water (D2O)", "params": {"U": 500, "minorK": 2, "numPasses": 2, "numTubes": 200, "roughness": 1.5e-06, "tubeID": 0.016, "tubeLength": 4, "tubeOD": 0.019}},
+    {"id": 5, "type": "Valve", "name": "FCV-5", "domain": "Hydraulic", "x": 300, "y": 240, "fluid": "Heavy Water (D2O)", "params": {"Kv": 120, "characteristic": 1, "position": 0.8, "rangeability": 50}}
   ],
   "connections": [
     {"compA": 1, "portA": "p", "compB": 2, "portB": "in"},

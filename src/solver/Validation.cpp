@@ -15,10 +15,13 @@ namespace umpnap {
 namespace {
 constexpr double kPi = 3.14159265358979323846;
 
-// Same K as BranchLaw's orifice law, recomputed for the analytical reference.
-double orificeKref(double bore, double Cd, double rho) {
-  double A = kPi * bore * bore / 4.0;
-  return rho / (2.0 * Cd * Cd * A * A);
+// Same K as BranchLaw's orifice law (ISO 5167), recomputed for the analytical
+// reference: K = (rho/2)*(1-beta^4)/(Cd^2 * Ao^2), beta = bore/pipeID.
+double orificeKref(double bore, double pipeID, double Cd, double rho) {
+  double Ao = kPi * bore * bore / 4.0;
+  double beta = bore / pipeID;
+  double oneMinusB4 = 1.0 - beta * beta * beta * beta;
+  return (rho / 2.0) * oneMinusB4 / (Cd * Cd * Ao * Ao);
 }
 }  // namespace
 
@@ -55,7 +58,7 @@ ValidationResult runPipeNetworkValidation(double tol) {
 
   // Analytical solution.
   FluidProps f = FluidLibrary::props("Light Water");
-  double K = orificeKref(0.05, 0.62, f.density);
+  double K = orificeKref(0.05, 0.1, 0.62, f.density);  // bore, pipeID, Cd, rho
   double Kpar = K / 4.0;  // two identical parallel orifices
   double Qa = std::sqrt(8.0e5 / (9.0 * K));
   double PMa = 3.0e5 - K * Qa * Qa;

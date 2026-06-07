@@ -19,14 +19,14 @@ int main(int argc, char** argv) {
 
   // Tank (5 m head) -> Valve -> atmospheric Boundary.
   auto tank = reg.create("Tank");
-  tank->params["area"] = 5.0;
+  tank->params["diameter"] = 1.6;  // ~2 m^2 cross-section
   tank->params["level"] = 5.0;
   tank->params["p_top"] = 1.013e5;
   tank->x = 80;  tank->y = 160;
   int t = net.addComponent(std::move(tank));
 
   auto valve = reg.create("Valve");
-  valve->params["Kv"] = 150.0;
+  valve->params["Kv"] = 800.0;
   valve->params["position"] = 1.0;
   valve->x = 320; valve->y = 160;
   int v = net.addComponent(std::move(valve));

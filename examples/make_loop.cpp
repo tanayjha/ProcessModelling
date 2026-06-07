@@ -21,33 +21,35 @@ int main(int argc, char** argv) {
   //   Tank -> Pump -> Pipe -> HeatExchanger -> Valve -> Tank
   auto tank = reg.create("Tank");
   tank->fluid = "Heavy Water (D2O)";
-  tank->params["area"] = 3.0;
+  tank->params["diameter"] = 2.5;
   tank->params["level"] = 4.0;
   tank->x = 80;  tank->y = 240;
   int t = net.addComponent(std::move(tank));
 
   auto pump = reg.create("Pump");
   pump->fluid = "Heavy Water (D2O)";
-  pump->params["H0"] = 60.0;
-  pump->params["a"] = 4.0e3;
+  pump->params["shutoffHead"] = 70.0;
+  pump->params["ratedHead"] = 55.0;
+  pump->params["ratedFlow"] = 0.12;
   pump->x = 300; pump->y = 80;
   int p = net.addComponent(std::move(pump));
 
   auto pipe = reg.create("Pipe");
   pipe->fluid = "Heavy Water (D2O)";
   pipe->params["length"] = 25.0;
-  pipe->params["diameter"] = 0.2;
+  pipe->params["ID"] = 0.2;
   pipe->x = 540; pipe->y = 80;
   int pi = net.addComponent(std::move(pipe));
 
   auto hx = reg.create("HeatExchanger");
   hx->fluid = "Heavy Water (D2O)";
+  hx->params["numTubes"] = 200.0;
   hx->x = 540; hx->y = 240;
   int h = net.addComponent(std::move(hx));
 
   auto valve = reg.create("Valve");
   valve->fluid = "Heavy Water (D2O)";
-  valve->params["Kv"] = 8.0;
+  valve->params["Kv"] = 120.0;
   valve->params["position"] = 0.8;
   valve->x = 300; valve->y = 240;
   int v = net.addComponent(std::move(valve));

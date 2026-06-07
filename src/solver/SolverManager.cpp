@@ -34,7 +34,9 @@ SolveReport SolverManager::runTransient(Network& net, Results& out, double dt,
         if (br.outNode == tankNode) qnet += q;   // flow enters tank
         if (br.inNode == tankNode) qnet -= q;    // flow leaves tank
       }
-      double area = c->param("area");
+      // Tank cross-sectional area from its diameter: A = pi*D^2/4.
+      double d = c->param("diameter");
+      double area = 3.14159265358979323846 * d * d / 4.0;
       if (area > 1e-9) {
         double newLevel = c->param("level") + dt * qnet / area;
         c->params["level"] = std::max(0.0, newLevel);

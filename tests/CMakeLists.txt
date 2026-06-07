@@ -7,6 +7,7 @@ endfunction()
 
 add_unit_test(smoke_test)
 add_unit_test(linalg_test)
+add_unit_test(curvefit_test)
 add_unit_test(fluid_test)
 add_unit_test(network_test)
 add_unit_test(registry_test)

@@ -10,6 +10,7 @@ namespace umpnap {
 struct ComponentDef {
   std::string type;
   Domain domain = Domain::Hydraulic;
+  std::string tagPrefix;  // default P&ID tag prefix, e.g. "P" -> "P-3"
   std::vector<Port> ports;
   std::vector<ParamSpec> params;
 };
