@@ -100,6 +100,32 @@ void PropertyEditor::rebuild() {
     form->addRow("Head curve", curveBtn);
   }
 
+  // Controller links (PID loop wiring by tag).
+  if (comp_->type == "Controller") {
+    auto addCfg = [&](const QString& label, const std::string& key,
+                      const QString& placeholder) {
+      auto* edit = new QLineEdit(
+          QString::fromStdString(comp_->cfg(key)), body_);
+      edit->setPlaceholderText(placeholder);
+      connect(edit, &QLineEdit::editingFinished, this, [this, edit, key]() {
+        if (comp_) comp_->config[key] = edit->text().toStdString();
+        emit edited();
+      });
+      form->addRow(label, edit);
+    };
+    addCfg("Measured tag", "measComp", "e.g. TK-1");
+    auto* varBox = new QComboBox(body_);
+    varBox->addItems({"level", "flow", "pressure"});
+    QString cur = QString::fromStdString(comp_->cfg("measVar"));
+    if (!cur.isEmpty()) varBox->setCurrentText(cur);
+    connect(varBox, &QComboBox::currentTextChanged, this, [this](const QString& t) {
+      if (comp_) comp_->config["measVar"] = t.toStdString();
+      emit edited();
+    });
+    form->addRow("Measured var", varBox);
+    addCfg("Output valve tag", "output", "e.g. FCV-1");
+  }
+
   // Governing equations for this library model.
   QString eq = equationText(comp_->type);
   if (!eq.isEmpty()) {

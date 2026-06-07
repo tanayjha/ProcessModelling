@@ -155,6 +155,7 @@ bool saveProject(const Network& net, const std::string& path) {
   std::ofstream f(path);
   if (!f) return false;
   f << "{\n";
+  f << "  \"version\": 1,\n";  // project schema version
   f << "  \"nextId\": " << net.nextId() << ",\n";
   f << "  \"components\": [\n";
   const auto& comps = net.components();
@@ -171,6 +172,17 @@ bool saveProject(const Network& net, const std::string& path) {
       f << "\"" << esc(kv.first) << "\": " << kv.second;
     }
     f << "}";
+    // Optional string config (e.g. controller links).
+    if (!c.config.empty()) {
+      f << ", \"config\": {";
+      bool firstCfg = true;
+      for (const auto& kv : c.config) {
+        if (!firstCfg) f << ", ";
+        firstCfg = false;
+        f << "\"" << esc(kv.first) << "\": \"" << esc(kv.second) << "\"";
+      }
+      f << "}";
+    }
     // Optional curve data (e.g. pump head curve) as arrays of [x, y] pairs.
     if (!c.curves.empty()) {
       f << ", \"curves\": {";
@@ -243,6 +255,11 @@ bool loadProject(Network& net, const std::string& path) {
       if (params && params->type == JValue::Obj)
         for (const auto& kv : params->obj)
           if (kv.second.type == JValue::Num) c->params[kv.first] = kv.second.num;
+      // String config: { "measComp": "TK-1", ... }
+      const JValue* config = cj.get("config");
+      if (config && config->type == JValue::Obj)
+        for (const auto& kv : config->obj)
+          if (kv.second.type == JValue::Str) c->config[kv.first] = kv.second.str;
       // Curve data: { "head": [[Q,H], ...], ... }
       const JValue* curves = cj.get("curves");
       if (curves && curves->type == JValue::Obj) {

@@ -136,9 +136,31 @@ factorization and a backtracking line search, where `J_ij = ∂F_i/∂P_j` is
 assembled from each branch's `dQ/dΔP`. Transient runs integrate tank levels and
 re-solve the steady system each timestep. See `src/solver/HydraulicSolver.cpp`.
 
-## Instrumentation (Transmitter, Actuator, Controller)
+## Control loops (Controller → valve)
 
-Registered as tagged P&ID library symbols with configuration fields, but **not
-coupled into the hydraulic solve in this phase**. A controller would compute
-`u = Kp·[ e + (1/Ti)∫e dt + Td·de/dt ]` and drive an actuator → valve position;
-that closed-loop coupling is a later phase.
+A `Controller` is linked by tag (`measComp`, `measVar`, `output`) and evaluated
+once per simulation cycle, before the hydraulic balance, using the previous
+cycle's readings:
+```
+err = setpoint − measured                          (measured = level | flow | pressure)
+u   = Kp·err + (Kp/Ti)·∫err dt                      (discrete PI, ∫ accumulated each cycle)
+position = clamp(u, 0, 1)  →  driven onto the output valve/damper
+```
+Anti-windup freezes the integral while the output is saturated. Reverse-acting
+loops use a negative `Kp`. The bundled `examples/control.umpnap` holds a tank
+level at a 5 m setpoint by modulating its inlet valve. See
+`src/solver/ControlSolver.cpp`.
+
+Transmitters, switches, RTDs, gauges and actuators are tagged P&ID library
+symbols; full signal-path wiring and discrete logic/state-machine execution are
+a later phase.
+
+## Pneumatic, filter and vessel models
+
+The pneumatic elements reuse the hydraulic laws with Air as the working fluid: a
+**Duct** is a Pipe, a **Damper** a Valve, and **Fan/Blower/Compressor** are pumps
+(head curve / affinity). A **Filter/Strainer** is a fixed resistance from a rated
+clean-element point, `K = ratedDP/ratedFlow²`. **PressurizedTank** and
+**AirReceiver** are vessels with the same node + inventory model as Tank, the top
+pressure being the blanket-gas pressure. Electrical components are configurable
+library symbols pending a power-flow solver.

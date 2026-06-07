@@ -66,6 +66,12 @@ const Component* Network::component(int id) const {
   return nullptr;
 }
 
+Component* Network::componentByName(const std::string& name) {
+  for (auto& c : comps_)
+    if (c->name == name) return c.get();
+  return nullptr;
+}
+
 void Network::connect(int a, const std::string& pa, int b, const std::string& pb) {
   conns_.push_back({a, pa, b, pb});
 }

@@ -1,0 +1,17 @@
+{
+  "nextId": 7,
+  "components": [
+    {"id": 1, "type": "Boundary", "name": "BND-SUP", "domain": "Hydraulic", "x": 60, "y": 80, "fluid": "Light Water", "params": {"elevation": 0, "pressure": 400000}},
+    {"id": 2, "type": "Valve", "name": "FCV-1", "domain": "Hydraulic", "x": 260, "y": 80, "fluid": "Light Water", "params": {"Kv": 80, "characteristic": 1, "position": 0.3, "rangeability": 50}},
+    {"id": 3, "type": "Tank", "name": "TK-1", "domain": "Hydraulic", "x": 470, "y": 150, "fluid": "Light Water", "params": {"diameter": 1.5, "elevation": 0, "height": 6, "level": 3.5, "p_top": 101300}},
+    {"id": 4, "type": "Orifice", "name": "FE-1", "domain": "Hydraulic", "x": 470, "y": 330, "fluid": "Light Water", "params": {"Cd": 0.62, "bore": 0.03, "pipeID": 0.1}},
+    {"id": 5, "type": "Boundary", "name": "BND-DRN", "domain": "Hydraulic", "x": 60, "y": 330, "fluid": "Light Water", "params": {"elevation": 0, "pressure": 101300}},
+    {"id": 6, "type": "Controller", "name": "LIC-1", "domain": "Control", "x": 260, "y": 300, "fluid": "Light Water", "params": {"Td": 0, "Ti": 30, "gain": 0.4, "setpoint": 5}, "config": {"measComp": "TK-1", "measVar": "level", "output": "FCV-1"}}
+  ],
+  "connections": [
+    {"compA": 1, "portA": "p", "compB": 2, "portB": "in"},
+    {"compA": 2, "portA": "out", "compB": 3, "portB": "p"},
+    {"compA": 3, "portA": "p", "compB": 4, "portB": "in"},
+    {"compA": 4, "portA": "out", "compB": 5, "portB": "p"}
+  ]
+}

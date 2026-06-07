@@ -5,6 +5,7 @@
 
 #include "components/hydraulic/BranchLaw.h"
 #include "core/Results.h"
+#include "solver/ControlSolver.h"
 #include "solver/NodeGraph.h"
 
 namespace umpnap {
@@ -16,6 +17,9 @@ SolveReport SolverManager::runSteady(Network& net, Results& out) {
 
 SolveReport SolverManager::stepTransient(Network& net, Results& out, double dt,
                                          double t) {
+  // Control pass first: PID controllers act on the previous cycle's readings
+  // and reposition their valves before this cycle's hydraulic balance.
+  applyControls(net, out, dt);
   SolveReport rep = hydraulic_.solveSteady(net, out, t);
 
   // Integrate tank levels from net inflow at each tank node (explicit Euler).

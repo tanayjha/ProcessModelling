@@ -22,6 +22,7 @@ class Network {
   void removeComponent(int id);
   Component* component(int id);
   const Component* component(int id) const;
+  Component* componentByName(const std::string& name);
   const std::vector<std::unique_ptr<Component>>& components() const { return comps_; }
 
   void connect(int a, const std::string& pa, int b, const std::string& pb);

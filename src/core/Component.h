@@ -35,6 +35,8 @@ class Component {
   double x = 0.0, y = 0.0;  // canvas position
   std::string fluid = "Light Water";
   std::map<std::string, double> params;
+  // String configuration (e.g. controller links: measComp/measVar/output tags).
+  std::map<std::string, std::string> config;
   // Tabular curve data keyed by name, e.g. "head" -> [(Q,H), ...] for a pump.
   std::map<std::string, std::vector<std::pair<double, double>>> curves;
   std::vector<Port> ports;
@@ -46,6 +48,10 @@ class Component {
   const std::vector<std::pair<double, double>>* curve(const std::string& k) const {
     auto it = curves.find(k);
     return it == curves.end() ? nullptr : &it->second;
+  }
+  std::string cfg(const std::string& k) const {
+    auto it = config.find(k);
+    return it == config.end() ? std::string() : it->second;
   }
   bool hasPort(const std::string& p) const {
     for (const auto& pt : ports)

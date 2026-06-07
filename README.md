@@ -53,6 +53,47 @@ heavy-water loop — Tank → Pump → Pipe → Heat Exchanger → Valve → Tan
 
 ![Plant Data datasheet](docs/umpnap_plantdata.png)
 
+### Dynamic simulation engine & runtime monitoring
+
+A live simulation engine (Simulation toolbar/menu) with **Run, Pause/Freeze,
+Single-Step, Fast-Forward (1–20×), Reset, Save/Restore Snapshot**, a running
+clock, and capturable/loadable **Initial Conditions** (`File ▸ Save/Load Initial
+Condition`). One tick advances exactly one solver cycle; Single-Step advances one
+(for debugging); Freeze stops sim time while you inspect/edit. As it runs, **live
+values appear on every symbol** (pressure, flow, level, head, valve %) and
+**animated arrows show flow direction** on each connection. Trends grow in real
+time. Components can be **cloned** (`Ctrl+D`); projects carry a schema version.
+
+![Runtime monitoring — live values + flow arrows](docs/umpnap_runtime.png)
+
+### Control loops
+
+A `Controller` links by tag to a measured component and an output valve and runs
+a discrete PI law each cycle (`u = Kp·err + (Kp/Ti)·∫err`, clamped to valve
+travel, with anti-windup). `examples/control.umpnap` holds a tank level at a 5 m
+setpoint by modulating its inlet valve.
+
+### Expanded multi-domain library
+
+Beyond the core hydraulic set: **Filter, Strainer, Header, PressurizedTank,
+AirReceiver**, and pneumatic **Duct, Damper, Fan, Blower, Compressor** (which
+solve on the nodal engine with Air); plus **electrical** (Grid, Generator,
+Transformer, Busbar, Breaker, Cable, Motor, Load) and **instrument/control**
+(Transmitter, Switch, RTD, Gauge, Actuator, Controller, Timer, Logic) as
+configurable, tagged P&ID symbols. Each draws its standard glyph.
+
+![Symbol gallery](docs/umpnap_gallery.png)
+
+> **Scope / roadmap.** This is a working core of the full digital-plant vision,
+> not the whole thing. Delivered: the simulation engine, runtime monitoring,
+> snapshots/initial conditions, a validated hydraulic+pneumatic nodal solver,
+> basic PID control, and a broad component library. **Not yet implemented:** a
+> true electrical power-flow solver (electrical components are symbols/datasheets
+> only), compressible-steam/two-phase thermodynamics, discrete logic/state-machine
+> execution, and every component variant in the original spec. The architecture
+> (common base, plugin registry, `ISolver` per domain) is built to extend into
+> these without rework.
+
 ## What is stubbed (later phases)
 
 Gas, thermal, and electrical solvers are **registered behind the same `ISolver`
