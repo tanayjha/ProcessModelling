@@ -24,6 +24,11 @@ class MainWindow : public QMainWindow {
  public:
   MainWindow();
 
+  // Load a project from a path (used for command-line opening on launch).
+  void openPath(const QString& path);
+  // Start the simulation engine running.
+  void startSimulation();
+
  private slots:
   void newProject();
   void openProject();

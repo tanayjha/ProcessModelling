@@ -229,8 +229,12 @@ void MainWindow::openProject() {
   QString path = QFileDialog::getOpenFileName(this, "Open Project", QString(),
                                               "UMPNAP Projects (*.umpnap)");
   if (path.isEmpty()) return;
+  openPath(path);
+}
+
+void MainWindow::openPath(const QString& path) {
   if (!loadProject(net_, path.toStdString())) {
-    QMessageBox::warning(this, "Open", "Failed to load project.");
+    QMessageBox::warning(this, "Open", "Failed to load project: " + path);
     return;
   }
   scene_->rebuildFromNetwork();
@@ -240,6 +244,8 @@ void MainWindow::openProject() {
   sim_->captureInitial();
   statusBar()->showMessage("Opened " + path);
 }
+
+void MainWindow::startSimulation() { sim_->start(); }
 
 void MainWindow::saveProject_() {
   QString path = QFileDialog::getSaveFileName(this, "Save Project", QString(),
