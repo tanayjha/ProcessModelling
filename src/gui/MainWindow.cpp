@@ -59,6 +59,8 @@ MainWindow::MainWindow() {
   });
   connect(scene_, &DiagramScene::networkChanged, this,
           [this]() { hierarchy_->refresh(&net_); });
+  connect(scene_, &DiagramScene::connectionRejected, this,
+          [this](const QString& r) { statusBar()->showMessage(r, 5000); });
   connect(properties_, &PropertyEditor::edited, this, [this]() {
     scene_->update();
     hierarchy_->refresh(&net_);

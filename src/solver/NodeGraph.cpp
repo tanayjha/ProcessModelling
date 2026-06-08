@@ -29,14 +29,18 @@ struct UnionFind {
 NodeGraph buildNodeGraph(const Network& net) {
   NodeGraph g;
 
-  // Assign every (component, port) a dense index. Only hydraulic-domain
-  // components form pressure nodes; instrumentation/control symbols are not
-  // part of the hydraulic solve and are skipped so they cannot create
-  // dangling (equation-less) free nodes.
+  // Only components that participate in the nodal pressure solve form nodes:
+  // flow branches, vessels, boundaries, junctions and headers. Instrumentation,
+  // electrical and (not-yet-solved) steam equipment are skipped so they cannot
+  // create dangling equation-less nodes.
+  auto participates = [](const std::string& t) {
+    return isBranch(t) || isTankType(t) || t == "Boundary" || t == "Junction" ||
+           t == "Header";
+  };
   std::map<std::pair<int, std::string>, int> portIndex;
   std::vector<std::pair<int, std::string>> portList;
   for (const auto& c : net.components()) {
-    if (c->domain != Domain::Hydraulic) continue;
+    if (!participates(c->type)) continue;
     for (const auto& p : c->ports) {
       portIndex[{c->id, p.name}] = (int)portList.size();
       portList.push_back({c->id, p.name});
@@ -91,6 +95,14 @@ NodeGraph buildNodeGraph(const Network& net) {
       FluidProps f = FluidLibrary::props(c->fluid);
       g.fixed[n] = true;
       g.fixedP[n] = c->param("p_top") + f.density * kG * c->param("level");
+      // Cover-gas tapping: pin at the blanket pressure so the gas network sees
+      // the vapour space as a fixed-pressure source (and an unconnected tapping
+      // does not create a singular free node).
+      auto it = g.portNode.find({c->id, "gas"});
+      if (it != g.portNode.end()) {
+        g.fixed[it->second] = true;
+        g.fixedP[it->second] = c->param("p_top");
+      }
     }
   }
 

@@ -31,6 +31,7 @@ class DiagramScene : public QGraphicsScene {
  signals:
   void componentSelected(umpnap::Component* c);  // nullptr when cleared
   void networkChanged();
+  void connectionRejected(const QString& reason);
 
  protected:
   void mousePressEvent(QGraphicsSceneMouseEvent* e) override;

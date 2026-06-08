@@ -25,6 +25,27 @@ Domain domainFromName(const std::string& s) {
   return Domain::Hydraulic;
 }
 
+Medium fluidMedium(const std::string& fluid) {
+  if (fluid == "Air" || fluid == "Helium" || fluid == "Nitrogen")
+    return Medium::Gas;
+  return Medium::Liquid;  // Light/Heavy Water, Oil
+}
+
+Medium effectiveMedium(const Component& c, const std::string& portName) {
+  const Port* p = c.port(portName);
+  if (!p) return Medium::Process;
+  if (p->medium != Medium::Process) return p->medium;  // fixed-medium port
+  // Process port: medium follows the working fluid. The tank cover-gas tapping
+  // carries the configured blanket gas.
+  bool tank = c.type == "Tank" || c.type == "PressurizedTank" ||
+              c.type == "AirReceiver";
+  if (tank && portName == "gas") {
+    std::string g = c.cfg("gasFluid");
+    return fluidMedium(g.empty() ? "Nitrogen" : g);
+  }
+  return fluidMedium(c.fluid);
+}
+
 int Network::addComponent(std::unique_ptr<Component> c) {
   int id = nextId_++;
   c->id = id;

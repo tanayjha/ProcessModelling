@@ -7,9 +7,15 @@ namespace umpnap {
 
 enum class PortRole { Inlet, Outlet, Bidirectional };
 
+// Physical medium carried by a port. `Process` means "follow the component's
+// fluid" (water/oil -> liquid, air/helium/nitrogen -> gas); the others are fixed.
+// Only ports that resolve to the SAME medium may be connected.
+enum class Medium { Process, Liquid, Gas, Steam, Electrical, Signal };
+
 struct Port {
   std::string name;
   PortRole role = PortRole::Bidirectional;
+  Medium medium = Medium::Process;
 };
 
 // Parameter schema entry (registry) and metadata for the property editor.
@@ -58,6 +64,19 @@ class Component {
       if (pt.name == p) return true;
     return false;
   }
+  const Port* port(const std::string& p) const {
+    for (const auto& pt : ports)
+      if (pt.name == p) return &pt;
+    return nullptr;
+  }
 };
+
+// Medium of a fluid by name: gases vs liquids (steam handled by the property
+// package later). Used to resolve a Process port's effective medium.
+Medium fluidMedium(const std::string& fluid);
+
+// Effective medium of a component's port, resolving Process -> fluid medium and
+// the tank cover-gas tapping -> Gas. Two ports may connect only if equal.
+Medium effectiveMedium(const Component& c, const std::string& portName);
 
 }  // namespace umpnap

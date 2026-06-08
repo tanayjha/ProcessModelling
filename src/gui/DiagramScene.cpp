@@ -14,6 +14,18 @@
 namespace umpnap {
 
 namespace {
+QString mediumName(Medium m) {
+  switch (m) {
+    case Medium::Liquid: return "liquid";
+    case Medium::Gas: return "gas";
+    case Medium::Steam: return "steam";
+    case Medium::Electrical: return "electrical";
+    case Medium::Signal: return "signal";
+    case Medium::Process: return "process";
+  }
+  return "?";
+}
+
 // Live readout string for a component from the latest results.
 QString runtimeText(const Component* c, const NodeGraph& g, const Results& res) {
   auto pressureBar = [&](const std::string& port) -> QString {
@@ -193,7 +205,15 @@ void DiagramScene::mouseReleaseEvent(QGraphicsSceneMouseEvent* e) {
       PortRole rd = hit->portRole(pIdx);
       bool bothIn = rs == PortRole::Inlet && rd == PortRole::Inlet;
       bool bothOut = rs == PortRole::Outlet && rd == PortRole::Outlet;
-      if (!bothIn && !bothOut) {
+      // Media must match: a liquid port cannot feed a gas/steam/electrical port.
+      Medium ms = effectiveMedium(*srcItem_->comp(), srcItem_->portName(srcPort_));
+      Medium md = effectiveMedium(*hit->comp(), hit->portName(pIdx));
+      if (bothIn || bothOut) {
+        emit connectionRejected("Cannot connect two inlets or two outlets.");
+      } else if (ms != md) {
+        emit connectionRejected("Incompatible media: " + mediumName(ms) + " ↔ " +
+                                mediumName(md) + " ports cannot be connected.");
+      } else {
         net_->connect(srcItem_->comp()->id, srcItem_->portName(srcPort_),
                       hit->comp()->id, hit->portName(pIdx));
         addConnectionItemForIndex((int)net_->connections().size() - 1);

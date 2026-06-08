@@ -38,6 +38,11 @@ void registerHydraulicComponents() {
   const Domain H = Domain::Hydraulic;
   const Domain I = Domain::Instrument;
   const Domain C = Domain::Control;
+  const Medium SIG = Medium::Signal;       // instrument/control signal ports
+  const Medium ELEC = Medium::Electrical;  // electrical terminals
+  const Medium GAS = Medium::Gas;          // fixed-gas ports (cover gas)
+  const Medium LIQ = Medium::Liquid;       // fixed-liquid ports
+  const Medium STM = Medium::Steam;        // steam ports
 
   // Each ParamSpec is {name, unit, default, min, max}. Values are stored in SI.
   // ----------------------- Hydraulic (solving) ----------------------------
@@ -47,8 +52,10 @@ void registerHydraulicComponents() {
                    {{"pressure", "Pa", 2.0e5, 0.0, 0.0},
                     {"elevation", "m", 0.0, 0.0, 0.0}}});
 
-  // Vertical cylindrical tank. Node pressure = p_top + rho*g*level.
-  reg.registerDef({"Tank", H, "TK", {{"p", BI}},
+  // Vertical cylindrical tank with a liquid port (p) and a cover-gas tapping
+  // (gas) so an air/gas network can be drawn to the vapour space.
+  reg.registerDef({"Tank", H, "TK",
+                   {{"p", BI, Medium::Process}, {"gas", BI, GAS}},
                    {{"diameter", "m", 2.0, 1e-3, 0.0},
                     {"height", "m", 6.0, 0.0, 0.0},
                     {"level", "m", 2.0, 0.0, 0.0},
@@ -113,9 +120,10 @@ void registerHydraulicComponents() {
   reg.registerDef({"Header", H, "HDR",
                    {{"a", BI}, {"b", BI}, {"c", BI}, {"d", BI}}, {}});
 
-  // Pressurised / gas-blanketed tank: same node + inventory as Tank, but the
-  // top pressure is the blanket gas pressure.
-  reg.registerDef({"PressurizedTank", H, "PTK", {{"p", BI}},
+  // Pressurised / gas-blanketed tank: liquid port + cover-gas tapping; the top
+  // pressure is the blanket gas pressure.
+  reg.registerDef({"PressurizedTank", H, "PTK",
+                   {{"p", BI, Medium::Process}, {"gas", BI, GAS}},
                    {{"diameter", "m", 2.0, 1e-3, 0.0},
                     {"height", "m", 6.0, 0.0, 0.0},
                     {"level", "m", 3.0, 0.0, 0.0},
@@ -171,30 +179,31 @@ void registerHydraulicComponents() {
   // ----------------------- Electrical (library symbols) -------------------
   // Rendered and configurable; a power-flow solver is a later phase.
   const Domain E = Domain::Electrical;
-  reg.registerDef({"Grid", E, "GRID", {{"t", BI}},
+  reg.registerDef({"Grid", E, "GRID", {{"t", BI, ELEC}},
                    {{"voltage", "V", 11000.0, 0.0, 0.0},
                     {"frequency", "Hz", 50.0, 0.0, 0.0}}});
-  reg.registerDef({"Generator", E, "GEN", {{"t", BI}},
+  reg.registerDef({"Generator", E, "GEN", {{"t", BI, ELEC}},
                    {{"rating", "kVA", 1000.0, 0.0, 0.0},
                     {"voltage", "V", 415.0, 0.0, 0.0},
                     {"pf", "-", 0.8, 0.0, 1.0}}});
-  reg.registerDef({"Transformer", E, "TX", {{"hv", BI}, {"lv", BI}},
+  reg.registerDef({"Transformer", E, "TX", {{"hv", BI, ELEC}, {"lv", BI, ELEC}},
                    {{"rating", "kVA", 1000.0, 0.0, 0.0},
                     {"ratio", "-", 26.5, 0.0, 0.0},
                     {"impedance", "%", 6.0, 0.0, 0.0}}});
-  reg.registerDef({"Busbar", E, "BUS", {{"a", BI}, {"b", BI}, {"c", BI}},
+  reg.registerDef({"Busbar", E, "BUS",
+                   {{"a", BI, ELEC}, {"b", BI, ELEC}, {"c", BI, ELEC}},
                    {{"voltage", "V", 415.0, 0.0, 0.0}}});
-  reg.registerDef({"Breaker", E, "CB", {{"in", BI}, {"out", BI}},
+  reg.registerDef({"Breaker", E, "CB", {{"in", BI, ELEC}, {"out", BI, ELEC}},
                    {{"rating", "A", 630.0, 0.0, 0.0},
                     {"state", "0/1", 1.0, 0.0, 1.0}}});
-  reg.registerDef({"Cable", E, "W", {{"in", BI}, {"out", BI}},
+  reg.registerDef({"Cable", E, "W", {{"in", BI, ELEC}, {"out", BI, ELEC}},
                    {{"length", "m", 50.0, 0.0, 0.0},
                     {"area", "mm2", 95.0, 0.0, 0.0}}});
-  reg.registerDef({"Motor", E, "M", {{"t", BI}},
+  reg.registerDef({"Motor", E, "M", {{"t", BI, ELEC}},
                    {{"rating", "kW", 75.0, 0.0, 0.0},
                     {"voltage", "V", 415.0, 0.0, 0.0},
                     {"efficiency", "-", 0.92, 0.0, 1.0}}});
-  reg.registerDef({"ElectricalLoad", E, "LD", {{"t", BI}},
+  reg.registerDef({"ElectricalLoad", E, "LD", {{"t", BI, ELEC}},
                    {{"power", "kW", 50.0, 0.0, 0.0},
                     {"pf", "-", 0.85, 0.0, 1.0}}});
 
@@ -204,45 +213,84 @@ void registerHydraulicComponents() {
   // "sig" port lets them be associated with a process component on the P&ID.
 
   // Transmitter: measVar 0=Pressure,1=Flow,2=Level,3=Temperature.
-  reg.registerDef({"Transmitter", I, "XT", {{"sig", BI}},
+  reg.registerDef({"Transmitter", I, "XT", {{"sig", BI, SIG}},
                    {{"measVar", "0..3", 0.0, 0.0, 3.0},
                     {"rangeMin", "eu", 0.0, 0.0, 0.0},
                     {"rangeMax", "eu", 100.0, 0.0, 0.0}}});
 
   // Valve actuator: failPosition 0=closed,1=open; type 0=pneumatic,1=motor.
-  reg.registerDef({"Actuator", I, "ACT", {{"sig", BI}},
+  reg.registerDef({"Actuator", I, "ACT", {{"sig", BI, SIG}},
                    {{"type", "0/1", 0.0, 0.0, 1.0},
                     {"strokeTime", "s", 5.0, 0.0, 0.0},
                     {"failPosition", "-", 0.0, 0.0, 1.0}}});
 
   // Process switch (pressure/level/flow/temp): trips at a setpoint.
-  reg.registerDef({"Switch", I, "XS", {{"sig", BI}},
+  reg.registerDef({"Switch", I, "XS", {{"sig", BI, SIG}},
                    {{"measVar", "0..3", 0.0, 0.0, 3.0},
                     {"setpoint", "eu", 50.0, 0.0, 0.0},
                     {"deadband", "eu", 1.0, 0.0, 0.0}}});
 
   // RTD / thermocouple temperature element.
-  reg.registerDef({"RTD", I, "TE", {{"sig", BI}},
+  reg.registerDef({"RTD", I, "TE", {{"sig", BI, SIG}},
                    {{"rangeMin", "C", 0.0, 0.0, 0.0},
                     {"rangeMax", "C", 200.0, 0.0, 0.0}}});
 
   // Local indicating gauge.
-  reg.registerDef({"Gauge", I, "GI", {{"sig", BI}},
+  reg.registerDef({"Gauge", I, "GI", {{"sig", BI, SIG}},
                    {{"rangeMin", "eu", 0.0, 0.0, 0.0},
                     {"rangeMax", "eu", 16.0, 0.0, 0.0}}});
 
   // PID controller / instrument bubble.
-  reg.registerDef({"Controller", C, "IC", {{"sig", BI}},
+  reg.registerDef({"Controller", C, "IC", {{"sig", BI, SIG}},
                    {{"setpoint", "eu", 50.0, 0.0, 0.0},
                     {"gain", "-", 1.0, 0.0, 0.0},
                     {"Ti", "s", 10.0, 0.0, 0.0},
                     {"Td", "s", 0.0, 0.0, 0.0}}});
 
   // Discrete logic / timer blocks.
-  reg.registerDef({"Timer", C, "TMR", {{"sig", BI}},
+  reg.registerDef({"Timer", C, "TMR", {{"sig", BI, SIG}},
                    {{"preset", "s", 5.0, 0.0, 0.0}}});
-  reg.registerDef({"Logic", C, "LGC", {{"in", BI}, {"out", BI}},
+  reg.registerDef({"Logic", C, "LGC", {{"in", BI, SIG}, {"out", BI, SIG}},
                    {{"function", "0=AND/1=OR/2=NOT", 0.0, 0.0, 2.0}}});
+
+  // ------------------------- Steam library (models) ----------------------
+  // Multi-medium two-phase equipment. Ports carry the correct media so only
+  // valid connections are allowed; full two-phase solving is a later phase.
+  reg.registerDef({"SteamGenerator", H, "SG",
+                   {{"feedwater", IN, LIQ}, {"steam", OUT, STM},
+                    {"blowdown", OUT, LIQ}},
+                   {{"pressure", "Pa", 4.7e6, 0.0, 0.0},
+                    {"thermalPower", "MW", 600.0, 0.0, 0.0},
+                    {"tubeArea", "m2", 3000.0, 0.0, 0.0},
+                    {"level", "m", 12.0, 0.0, 0.0}}});
+  reg.registerDef({"Turbine", H, "TUR",
+                   {{"steam", IN, STM}, {"exhaust", OUT, STM}},
+                   {{"ratedPower", "MW", 700.0, 0.0, 0.0},
+                    {"inletP", "Pa", 4.5e6, 0.0, 0.0},
+                    {"exhaustP", "Pa", 5.0e3, 0.0, 0.0},
+                    {"efficiency", "-", 0.85, 0.0, 1.0}}});
+  reg.registerDef({"Condenser", H, "CND",
+                   {{"steam", IN, STM}, {"condensate", OUT, LIQ},
+                    {"cwIn", IN, Medium::Process}, {"cwOut", OUT, Medium::Process}},
+                   {{"pressure", "Pa", 5.0e3, 0.0, 0.0},
+                    {"duty", "MW", 700.0, 0.0, 0.0},
+                    {"area", "m2", 8000.0, 0.0, 0.0}}});
+  reg.registerDef({"Deaerator", H, "DA",
+                   {{"feedwater", IN, LIQ}, {"steam", IN, STM}, {"out", OUT, LIQ},
+                    {"gas", BI, GAS}},
+                   {{"pressure", "Pa", 1.2e5, 0.0, 0.0},
+                    {"diameter", "m", 3.0, 1e-3, 0.0},
+                    {"level", "m", 2.0, 0.0, 0.0},
+                    {"p_top", "Pa", 1.2e5, 0.0, 0.0}}});
+  // ASDV (atmospheric steam dump) / CSDV (condenser steam dump) relief valves.
+  reg.registerDef({"ASDV", H, "ASDV", {{"in", IN, STM}, {"out", OUT, STM}},
+                   {{"Kv", "m3/h/bar^0.5", 1500.0, 1e-3, 0.0},
+                    {"setpoint", "Pa", 5.0e6, 0.0, 0.0},
+                    {"position", "-", 0.0, 0.0, 1.0}}});
+  reg.registerDef({"CSDV", H, "CSDV", {{"in", IN, STM}, {"out", OUT, STM}},
+                   {{"Kv", "m3/h/bar^0.5", 2000.0, 1e-3, 0.0},
+                    {"setpoint", "Pa", 4.8e6, 0.0, 0.0},
+                    {"position", "-", 0.0, 0.0, 1.0}}});
 }
 
 }  // namespace umpnap

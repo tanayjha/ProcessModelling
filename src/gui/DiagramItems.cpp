@@ -200,23 +200,36 @@ void ComponentItem::layoutPorts() {
       case PortRole::Bidirectional: bidir.push_back(i); break;
     }
   }
-  auto place = [&](const std::vector<int>& idxs, double xLocal, bool bottom) {
+  // Gas/steam bidirectional tappings (e.g. tank cover gas) go on the top edge;
+  // other bidirectional ports go along the bottom.
+  std::vector<int> topPorts, bottomPorts;
+  for (int i : bidir) {
+    const Port& p = comp_->ports[i];
+    if (p.name == "gas" || p.medium == Medium::Gas || p.medium == Medium::Steam)
+      topPorts.push_back(i);
+    else
+      bottomPorts.push_back(i);
+  }
+  auto placeSide = [&](const std::vector<int>& idxs, double xLocal) {
     int n = (int)idxs.size();
     for (int k = 0; k < n; ++k) {
       const Port& port = comp_->ports[idxs[k]];
-      PortVis pv;
-      pv.name = port.name;
-      pv.role = port.role;
-      if (bottom)
-        pv.local = QPointF(w_ * (k + 1.0) / (n + 1.0), gh);
-      else
-        pv.local = QPointF(xLocal, gh * (k + 1.0) / (n + 1.0));
-      ports_.push_back(pv);
+      ports_.push_back({port.name, port.role,
+                        QPointF(xLocal, gh * (k + 1.0) / (n + 1.0))});
     }
   };
-  place(inlets, 0.0, false);
-  place(outlets, w_, false);
-  place(bidir, 0.0, true);
+  auto placeEdge = [&](const std::vector<int>& idxs, double yLocal) {
+    int n = (int)idxs.size();
+    for (int k = 0; k < n; ++k) {
+      const Port& port = comp_->ports[idxs[k]];
+      ports_.push_back({port.name, port.role,
+                        QPointF(w_ * (k + 1.0) / (n + 1.0), yLocal)});
+    }
+  };
+  placeSide(inlets, 0.0);
+  placeSide(outlets, w_);
+  placeEdge(topPorts, 0.0);
+  placeEdge(bottomPorts, gh);
 }
 
 QRectF ComponentItem::boundingRect() const {
