@@ -6,6 +6,7 @@
 #include <QGraphicsView>
 #include <QInputDialog>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPainter>
@@ -138,6 +139,32 @@ void MainWindow::buildSimToolbar() {
   tb->addAction("Snapshot", this, [this]() { sim_->saveSnapshot(); });
   tb->addAction("Restore", this, [this]() { sim_->restoreSnapshot(); });
   tb->addAction("Validate", this, &MainWindow::runValidation);
+  tb->addSeparator();
+  tb->addWidget(new QLabel(" Find tag ", tb));
+  auto* search = new QLineEdit(tb);
+  search->setPlaceholderText("e.g. P-2");
+  search->setMaximumWidth(120);
+  search->setClearButtonEnabled(true);
+  connect(search, &QLineEdit::returnPressed, this, [this, search]() {
+    QString q = search->text().trimmed();
+    if (q.isEmpty()) return;
+    Component* c = net_.componentByName(q.toStdString());
+    if (!c) {  // fall back to a case-insensitive partial tag match
+      for (const auto& comp : net_.components())
+        if (QString::fromStdString(comp->name).contains(q, Qt::CaseInsensitive)) {
+          c = comp.get();
+          break;
+        }
+    }
+    if (c) {
+      scene_->selectComponent(c->id);  // -> selects + shows in Properties
+      view_->centerOn(c->x, c->y);
+      statusBar()->showMessage("Found " + QString::fromStdString(c->name));
+    } else {
+      statusBar()->showMessage("No component matching '" + q + "'");
+    }
+  });
+  tb->addWidget(search);
   tb->addSeparator();
   clock_ = new QLabel("  t = 0.0 s   [Stopped]  ", tb);
   tb->addWidget(clock_);

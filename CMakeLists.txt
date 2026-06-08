@@ -58,3 +58,8 @@ add_executable(make_gallery examples/make_gallery.cpp)
 target_link_libraries(make_gallery PRIVATE umpnap_engine)
 add_executable(make_control examples/make_control.cpp)
 target_link_libraries(make_control PRIVATE umpnap_engine)
+
+if(Qt6_FOUND)
+  add_executable(umpnap_palette tools/palette_shot.cpp)
+  target_link_libraries(umpnap_palette PRIVATE umpnap_gui)
+endif()

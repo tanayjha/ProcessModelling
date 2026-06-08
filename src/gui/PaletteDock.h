@@ -1,12 +1,13 @@
 #pragma once
 #include <QDockWidget>
 
-class QListWidget;
-class QListWidgetItem;
+class QTreeWidget;
+class QTreeWidgetItem;
 
 namespace umpnap {
 
-// Lists registered component types; clicking one arms it for placement.
+// Component palette grouped by library (Hydraulic, Air/Gas, Steam, Electrical,
+// Instrumentation & Control). Clicking a type arms it for placement.
 class PaletteDock : public QDockWidget {
   Q_OBJECT
  public:
@@ -16,10 +17,10 @@ class PaletteDock : public QDockWidget {
   void typeSelected(const QString& type);
 
  private slots:
-  void onItemClicked(QListWidgetItem* item);
+  void onItemClicked(QTreeWidgetItem* item, int column);
 
  private:
-  QListWidget* list_;
+  QTreeWidget* tree_;
 };
 
 }  // namespace umpnap
