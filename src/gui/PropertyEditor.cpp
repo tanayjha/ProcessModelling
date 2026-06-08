@@ -54,7 +54,9 @@ void PropertyEditor::rebuild() {
   // Fluid selector (generic property framework).
   const ComponentDef* def = ComponentRegistry::instance().find(comp_->type);
 
-  // Fluid selector (only meaningful for hydraulic-domain components).
+  // Fluid selector (only meaningful for hydraulic-domain components). Tanks and
+  // other vessels with a vapour space carry a separate cover-gas fluid.
+  bool isVessel = comp_->hasPort("gas");
   if (def && def->domain == Domain::Hydraulic) {
     auto* fluidBox = new QComboBox(body_);
     for (const auto& n : FluidLibrary::names())
@@ -65,12 +67,39 @@ void PropertyEditor::rebuild() {
               if (comp_) comp_->fluid = t.toStdString();
               emit edited();
             });
-    form->addRow("Fluid", fluidBox);
+    form->addRow(isVessel ? "Liquid fluid" : "Fluid", fluidBox);
+
+    if (isVessel) {
+      auto* gasBox = new QComboBox(body_);
+      for (const char* g : {"Nitrogen", "Helium", "Air"}) gasBox->addItem(g);
+      std::string gf = comp_->cfg("gasFluid");
+      gasBox->setCurrentText(QString::fromStdString(gf.empty() ? "Nitrogen" : gf));
+      connect(gasBox, &QComboBox::currentTextChanged, this,
+              [this](const QString& t) {
+                if (comp_) comp_->config["gasFluid"] = t.toStdString();
+                emit edited();
+              });
+      form->addRow("Cover gas", gasBox);
+    }
   }
 
   // Parameters from the registry schema (with units).
   if (def) {
     for (const auto& ps : def->params) {
+      // Valve/damper flow characteristic: present as a named dropdown.
+      if (ps.name == "characteristic") {
+        auto* combo = new QComboBox(body_);
+        combo->addItems({"Linear", "Equal-percentage", "Quick-opening"});
+        int idx = (int)comp_->param("characteristic");
+        combo->setCurrentIndex(idx < 0 || idx > 2 ? 1 : idx);
+        connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+                [this](int i) {
+                  if (comp_) comp_->params["characteristic"] = i;
+                  emit edited();
+                });
+        form->addRow("Characteristic", combo);
+        continue;
+      }
       auto* edit = new QLineEdit(body_);
       edit->setText(QString::number(comp_->param(ps.name)));
       std::string key = ps.name;

@@ -177,6 +177,20 @@ void PlantDataDialog::buildTabFor(const std::string& type) {
 
     // Parameters (editable numeric text; header label == param name).
     for (const auto& ps : def->params) {
+      if (ps.name == "characteristic") {
+        auto* combo = new QComboBox(table);
+        combo->addItems({"Linear", "Equal-percentage", "Quick-opening"});
+        int idx = (int)c->param("characteristic");
+        combo->setCurrentIndex(idx < 0 || idx > 2 ? 1 : idx);
+        Component* cap = c;
+        connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+                [this, cap](int i) {
+                  cap->params["characteristic"] = i;
+                  emit dataChanged();
+                });
+        table->setCellWidget(row, col++, combo);
+        continue;
+      }
       auto* item =
           new QTableWidgetItem(QString::number(c->param(ps.name), 'g', 6));
       table->setItem(row, col++, item);

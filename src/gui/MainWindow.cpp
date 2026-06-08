@@ -211,10 +211,12 @@ void MainWindow::openPlantData() {
   connect(&dlg, &PlantDataDialog::dataChanged, this, [this]() {
     scene_->update();
     hierarchy_->refresh(&net_);
+    if (selected_) properties_->showComponent(selected_);  // keep panel in sync
   });
   dlg.exec();
   scene_->update();
   hierarchy_->refresh(&net_);
+  if (selected_) properties_->showComponent(selected_);
 }
 
 void MainWindow::newProject() {
