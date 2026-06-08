@@ -72,7 +72,8 @@ void drawSymbol(QPainter* p, const std::string& type, const Component& c,
     p->drawLine(QPointF(g.left() + 6, cy - off - 4), QPointF(g.left() + 6, cy + off + 4));
     p->drawLine(QPointF(g.right() - 6, cy - off - 4), QPointF(g.right() - 6, cy + off + 4));
 
-  } else if (type == "Valve" || type == "Damper") {
+  } else if (type == "Valve" || type == "Damper" || type == "ASDV" ||
+             type == "CSDV") {
     // Bowtie (two triangles meeting at the stem centre).
     QPolygonF bow;
     bow << QPointF(g.left() + 2, cy - r) << QPointF(cx, cy)
@@ -107,6 +108,41 @@ void drawSymbol(QPainter* p, const std::string& type, const Component& c,
     }
     p->setBrush(Qt::NoBrush);
     p->drawPath(path);
+
+  } else if (type == "SteamGenerator") {
+    // Tall vessel with a domed top and U-tube bundle hint.
+    QRectF body(cx - r * 0.8, g.top() + 6, r * 1.6, g.height() - 8);
+    p->drawRoundedRect(body, r * 0.5, r * 0.5);
+    p->drawArc(QRectF(body.left(), body.top() - 6, body.width(), 12), 0, 180 * 16);
+    p->drawLine(QPointF(cx - 4, body.center().y()), QPointF(cx - 4, body.bottom() - 4));
+    p->drawLine(QPointF(cx + 4, body.center().y()), QPointF(cx + 4, body.bottom() - 4));
+    p->drawArc(QRectF(cx - 4, body.center().y() - 4, 8, 8), 180 * 16, 180 * 16);
+
+  } else if (type == "Turbine") {
+    // Casing trapezoid (expands toward the exhaust).
+    QPolygonF tz;
+    tz << QPointF(g.left() + 4, cy - r * 0.4) << QPointF(g.right() - 4, cy - r)
+       << QPointF(g.right() - 4, cy + r) << QPointF(g.left() + 4, cy + r * 0.4);
+    p->drawPolygon(tz);
+
+  } else if (type == "Condenser") {
+    // Box shell with a cooling serpentine.
+    QRectF shell(g.left() + 2, cy - r, g.width() - 4, 2 * r);
+    p->drawRect(shell);
+    QPainterPath path;
+    double x0 = shell.left() + 6, x1 = shell.right() - 6;
+    path.moveTo(x0, cy);
+    for (int i = 0; i <= 4; ++i)
+      path.lineTo(x0 + (x1 - x0) * i / 4, cy + ((i % 2 == 0) ? -r * 0.5 : r * 0.5));
+    p->setBrush(Qt::NoBrush);
+    p->drawPath(path);
+
+  } else if (type == "Deaerator") {
+    // Horizontal storage vessel with a small dome (vent) on top.
+    QRectF body(g.left() + 2, cy - r * 0.6, g.width() - 4, r * 1.2);
+    p->drawRoundedRect(body, r * 0.5, r * 0.5);
+    p->drawChord(QRectF(cx - r * 0.4, body.top() - r * 0.5, r * 0.8, r * 0.6), 0,
+                 180 * 16);
 
   } else if (type == "Junction" || type == "Header") {
     if (type == "Header") {

@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "nextId": 6,
+  "components": [
+    {"id": 1, "type": "SteamGenerator", "name": "SG-1", "domain": "Hydraulic", "x": 80, "y": 60, "fluid": "Light Water", "params": {"level": 12, "pressure": 4.7e+06, "thermalPower": 600, "tubeArea": 3000}},
+    {"id": 2, "type": "Turbine", "name": "TUR-2", "domain": "Hydraulic", "x": 320, "y": 60, "fluid": "Light Water", "params": {"efficiency": 0.85, "exhaustP": 5000, "inletP": 4.5e+06, "ratedPower": 700}},
+    {"id": 3, "type": "Condenser", "name": "CND-3", "domain": "Hydraulic", "x": 560, "y": 60, "fluid": "Light Water", "params": {"area": 8000, "duty": 700, "pressure": 5000}},
+    {"id": 4, "type": "Deaerator", "name": "DA-4", "domain": "Hydraulic", "x": 560, "y": 300, "fluid": "Light Water", "params": {"diameter": 3, "level": 2, "p_top": 120000, "pressure": 120000}},
+    {"id": 5, "type": "Pump", "name": "FWP-1", "domain": "Hydraulic", "x": 300, "y": 300, "fluid": "Light Water", "params": {"efficiency": 0.75, "ratedFlow": 0.05, "ratedHead": 50, "shutoffHead": 65, "speedRatio": 1}}
+  ],
+  "connections": [
+    {"compA": 1, "portA": "steam", "compB": 2, "portB": "steam"},
+    {"compA": 2, "portA": "exhaust", "compB": 3, "portB": "steam"},
+    {"compA": 3, "portA": "condensate", "compB": 4, "portB": "feedwater"},
+    {"compA": 4, "portA": "out", "compB": 5, "portB": "in"},
+    {"compA": 5, "portA": "out", "compB": 1, "portB": "feedwater"}
+  ]
+}
