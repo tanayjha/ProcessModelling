@@ -283,10 +283,16 @@ BranchEval evalBranch(const Component& c, double dP, const FluidProps& f) {
   if (c.type == "Pump" || c.type == "Fan" || c.type == "Blower" ||
       c.type == "Compressor")
     return pumpEval(c, dP, f);
+  // Pipe/duct include a static-head term from the elevation change dZ
+  // (= outlet elevation - inlet elevation):
+  //   P_in - P_out = K*Q|Q| + rho*g*dZ   =>   Q = f( (dP - rho*g*dZ), K ).
+  if (c.type == "Pipe" || c.type == "Duct") {
+    double K = pipeK(c, dP, f);
+    double dPeff = dP - f.density * kG * c.param("dZ");
+    return resistanceFlow(dPeff, K);
+  }
   double K = 0.0;
-  if (c.type == "Pipe" || c.type == "Duct")
-    K = pipeK(c, dP, f);
-  else if (c.type == "Valve" || c.type == "Damper")
+  if (c.type == "Valve" || c.type == "Damper")
     K = valveK(c, f);
   else if (c.type == "Orifice")
     K = orificeK(c, f);

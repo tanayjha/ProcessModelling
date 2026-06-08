@@ -382,6 +382,7 @@ ConnectionItem::ConnectionItem(ComponentItem* a, int pa, ComponentItem* b, int p
   pen.setWidth(2);
   setPen(pen);
   setZValue(-1);
+  setFlag(QGraphicsItem::ItemIsSelectable, true);
   updatePosition();
 }
 
@@ -397,6 +398,12 @@ void ConnectionItem::setFlow(double signedFlow) {
 
 void ConnectionItem::paint(QPainter* p, const QStyleOptionGraphicsItem* o,
                            QWidget* w) {
+  if (isSelected()) {
+    QPen hl(QColor(20, 90, 200));
+    hl.setWidth(4);
+    p->setPen(hl);
+    p->drawLine(line());
+  }
   QGraphicsLineItem::paint(p, o, w);
   if (!hasFlow_ || std::fabs(flow_) < 1e-9) return;
 

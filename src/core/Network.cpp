@@ -1,6 +1,7 @@
 #include "core/Network.h"
 
 #include "core/ComponentRegistry.h"
+#include "core/FluidLibrary.h"
 
 namespace umpnap {
 
@@ -26,9 +27,7 @@ Domain domainFromName(const std::string& s) {
 }
 
 Medium fluidMedium(const std::string& fluid) {
-  if (fluid == "Air" || fluid == "Helium" || fluid == "Nitrogen")
-    return Medium::Gas;
-  return Medium::Liquid;  // Light/Heavy Water, Oil
+  return FluidLibrary::isGas(fluid) ? Medium::Gas : Medium::Liquid;
 }
 
 Medium effectiveMedium(const Component& c, const std::string& portName) {

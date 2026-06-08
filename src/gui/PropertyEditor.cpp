@@ -59,8 +59,11 @@ void PropertyEditor::rebuild() {
   bool isVessel = comp_->hasPort("gas");
   if (def && def->domain == Domain::Hydraulic) {
     auto* fluidBox = new QComboBox(body_);
-    for (const auto& n : FluidLibrary::names())
-      fluidBox->addItem(QString::fromStdString(n));
+    // A vessel's main fluid is its liquid contents, so list liquids only;
+    // a generic line component may carry any fluid.
+    const auto& fluidList =
+        isVessel ? FluidLibrary::liquids() : FluidLibrary::names();
+    for (const auto& n : fluidList) fluidBox->addItem(QString::fromStdString(n));
     fluidBox->setCurrentText(QString::fromStdString(comp_->fluid));
     connect(fluidBox, &QComboBox::currentTextChanged, this,
             [this](const QString& t) {
@@ -71,7 +74,8 @@ void PropertyEditor::rebuild() {
 
     if (isVessel) {
       auto* gasBox = new QComboBox(body_);
-      for (const char* g : {"Nitrogen", "Helium", "Air"}) gasBox->addItem(g);
+      for (const auto& g : FluidLibrary::gases())
+        gasBox->addItem(QString::fromStdString(g));
       std::string gf = comp_->cfg("gasFluid");
       gasBox->setCurrentText(QString::fromStdString(gf.empty() ? "Nitrogen" : gf));
       connect(gasBox, &QComboBox::currentTextChanged, this,

@@ -58,6 +58,11 @@ class ConnectionItem : public QGraphicsLineItem {
   void setFlow(double signedFlow);
   void paint(QPainter* p, const QStyleOptionGraphicsItem* o, QWidget* w) override;
 
+  ComponentItem* endA() const { return a_; }
+  ComponentItem* endB() const { return b_; }
+  int portA() const { return pa_; }
+  int portB() const { return pb_; }
+
  private:
   ComponentItem* a_;
   int pa_;

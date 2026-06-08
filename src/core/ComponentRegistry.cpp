@@ -62,13 +62,16 @@ void registerHydraulicComponents() {
                     {"p_top", "Pa", 1.013e5, 0.0, 0.0},
                     {"elevation", "m", 0.0, 0.0, 0.0}}});
 
-  // Pipe: Darcy-Weisbach + minor losses. ID drives flow area; OD is wall info.
+  // Pipe: Darcy-Weisbach + minor losses + static head. ID drives flow area;
+  // OD is wall info. dZ = outlet elevation - inlet elevation (positive: outlet
+  // higher than inlet, i.e. flow climbs from inlet -> outlet).
   reg.registerDef({"Pipe", H, "L", {{"in", IN}, {"out", OUT}},
                    {{"length", "m", 10.0, 0.0, 0.0},
                     {"ID", "m", 0.1, 1e-3, 0.0},
                     {"OD", "m", 0.114, 1e-3, 0.0},
                     {"roughness", "m", 4.5e-5, 0.0, 0.0},
                     {"minorK", "-", 0.0, 0.0, 0.0},
+                    {"dZ", "m", 0.0, 0.0, 0.0},
                     {"tuning", "-", 1.0, 0.0, 0.0}}});
 
   // Control valve sized by metric flow coefficient Kv with an inherent
@@ -77,13 +80,15 @@ void registerHydraulicComponents() {
                    {{"Kv", "m3/h/bar^0.5", 50.0, 1e-3, 0.0},
                     {"characteristic", "0/1/2", 1.0, 0.0, 2.0},
                     {"rangeability", "-", 50.0, 1.1, 0.0},
-                    {"position", "-", 1.0, 0.0, 1.0}}});
+                    {"position", "-", 1.0, 0.0, 1.0},
+                    {"elevation", "m", 0.0, 0.0, 0.0}}});
 
   // Thin-plate metering orifice (ISO 5167).
   reg.registerDef({"Orifice", H, "FE", {{"in", IN}, {"out", OUT}},
                    {{"bore", "m", 0.05, 1e-3, 0.0},
                     {"pipeID", "m", 0.1, 1e-3, 0.0},
-                    {"Cd", "-", 0.62, 0.1, 1.0}}});
+                    {"Cd", "-", 0.62, 0.1, 1.0},
+                    {"elevation", "m", 0.0, 0.0, 0.0}}});
 
   // Centrifugal pump. Uses a fitted (Q,H) "head" curve if present, else builds
   // a quadratic from shutoff/rated datasheet points. speedRatio applies the
@@ -93,7 +98,8 @@ void registerHydraulicComponents() {
                     {"ratedHead", "m", 50.0, 0.0, 0.0},
                     {"shutoffHead", "m", 65.0, 0.0, 0.0},
                     {"efficiency", "-", 0.75, 0.0, 1.0},
-                    {"speedRatio", "-", 1.0, 0.0, 0.0}}});
+                    {"speedRatio", "-", 1.0, 0.0, 0.0},
+                    {"elevation", "m", 0.0, 0.0, 0.0}}});
 
   reg.registerDef({"Junction", H, "J", {{"a", BI}, {"b", BI}, {"c", BI}}, {}});
 
@@ -106,15 +112,18 @@ void registerHydraulicComponents() {
                     {"numPasses", "-", 2.0, 1.0, 0.0},
                     {"roughness", "m", 1.5e-6, 0.0, 0.0},
                     {"minorK", "-", 2.0, 0.0, 0.0},
-                    {"U", "W/m2K", 500.0, 0.0, 0.0}}});
+                    {"U", "W/m2K", 500.0, 0.0, 0.0},
+                    {"elevation", "m", 0.0, 0.0, 0.0}}});
 
   // Filter / strainer: clean-element resistance from a rated ΔP at rated flow.
   reg.registerDef({"Filter", H, "FL", {{"in", IN}, {"out", OUT}},
                    {{"ratedFlow", "m3/s", 0.05, 1e-6, 0.0},
-                    {"ratedDP", "Pa", 2.0e4, 0.0, 0.0}}});
+                    {"ratedDP", "Pa", 2.0e4, 0.0, 0.0},
+                    {"elevation", "m", 0.0, 0.0, 0.0}}});
   reg.registerDef({"Strainer", H, "ST", {{"in", IN}, {"out", OUT}},
                    {{"ratedFlow", "m3/s", 0.05, 1e-6, 0.0},
-                    {"ratedDP", "Pa", 1.0e4, 0.0, 0.0}}});
+                    {"ratedDP", "Pa", 1.0e4, 0.0, 0.0},
+                    {"elevation", "m", 0.0, 0.0, 0.0}}});
 
   // Header: large manifold node (multi-port, ideal — like a Junction).
   reg.registerDef({"Header", H, "HDR",
@@ -139,6 +148,7 @@ void registerHydraulicComponents() {
                     {"OD", "m", 0.31, 1e-3, 0.0},
                     {"roughness", "m", 9.0e-5, 0.0, 0.0},
                     {"minorK", "-", 0.0, 0.0, 0.0},
+                    {"dZ", "m", 0.0, 0.0, 0.0},
                     {"tuning", "-", 1.0, 0.0, 0.0}},
                    "Air"});
   reg.registerDef({"Damper", H, "DMP", {{"in", IN}, {"out", OUT}},

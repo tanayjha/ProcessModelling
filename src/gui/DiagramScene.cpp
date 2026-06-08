@@ -4,6 +4,7 @@
 #include <QGraphicsSceneMouseEvent>
 #include <QKeyEvent>
 #include <QPen>
+#include <tuple>
 
 #include "components/hydraulic/BranchLaw.h"
 #include "core/ComponentRegistry.h"
@@ -231,16 +232,33 @@ void DiagramScene::mouseReleaseEvent(QGraphicsSceneMouseEvent* e) {
 
 void DiagramScene::keyPressEvent(QKeyEvent* e) {
   if (e->key() == Qt::Key_Delete || e->key() == Qt::Key_Backspace) {
-    std::vector<int> toDelete;
+    std::vector<int> compsToDelete;
+    // Connections to remove, as endpoint tuples (component id + port name).
+    std::vector<std::tuple<int, std::string, int, std::string>> wires;
     for (auto* it : selectedItems()) {
       if (auto* ci = dynamic_cast<ComponentItem*>(it))
-        toDelete.push_back(ci->comp()->id);
+        compsToDelete.push_back(ci->comp()->id);
+      else if (auto* w = dynamic_cast<ConnectionItem*>(it))
+        wires.emplace_back(w->endA()->comp()->id, w->endA()->portName(w->portA()),
+                           w->endB()->comp()->id, w->endB()->portName(w->portB()));
     }
-    if (!toDelete.empty()) {
-      for (int id : toDelete) net_->removeComponent(id);
+    if (!compsToDelete.empty() || !wires.empty()) {
+      // Remove selected wires by matching endpoints.
+      for (const auto& wr : wires) {
+        const auto& conns = net_->connections();
+        for (int i = 0; i < (int)conns.size(); ++i) {
+          const Connection& c = conns[i];
+          bool fwd = c.compA == std::get<0>(wr) && c.portA == std::get<1>(wr) &&
+                     c.compB == std::get<2>(wr) && c.portB == std::get<3>(wr);
+          bool rev = c.compA == std::get<2>(wr) && c.portA == std::get<3>(wr) &&
+                     c.compB == std::get<0>(wr) && c.portB == std::get<1>(wr);
+          if (fwd || rev) { net_->disconnect(i); break; }
+        }
+      }
+      for (int id : compsToDelete) net_->removeComponent(id);
       rebuildFromNetwork();
       emit networkChanged();
-      emit componentSelected(nullptr);
+      if (!compsToDelete.empty()) emit componentSelected(nullptr);
       e->accept();
       return;
     }

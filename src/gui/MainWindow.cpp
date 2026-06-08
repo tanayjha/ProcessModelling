@@ -2,6 +2,7 @@
 
 #include <QAction>
 #include <QComboBox>
+#include <QDockWidget>
 #include <QFileDialog>
 #include <QGraphicsView>
 #include <QInputDialog>
@@ -35,7 +36,9 @@ MainWindow::MainWindow() {
   scene_ = new DiagramScene(&net_, this);
   view_ = new QGraphicsView(scene_, this);
   view_->setRenderHint(QPainter::Antialiasing, true);
-  view_->setDragMode(QGraphicsView::NoDrag);
+  // Rubber-band selection over empty canvas; the scene intercepts presses on
+  // ports (wiring) and palette placement, so this only drags a selection box.
+  view_->setDragMode(QGraphicsView::RubberBandDrag);
   setCentralWidget(view_);
 
   palette_ = new PaletteDock(this);
@@ -111,6 +114,29 @@ void MainWindow::buildMenus() {
     double dt = QInputDialog::getDouble(this, "Timestep", "dt (s):", sim_->dt(),
                                         1e-6, 1e6, 4, &ok);
     if (ok) sim_->setDt(dt);
+  });
+
+  // View menu: show/hide and restore the docks.
+  QMenu* view = menuBar()->addMenu("&View");
+  for (QDockWidget* d : {static_cast<QDockWidget*>(palette_),
+                         static_cast<QDockWidget*>(hierarchy_),
+                         static_cast<QDockWidget*>(properties_),
+                         static_cast<QDockWidget*>(trends_)})
+    view->addAction(d->toggleViewAction());
+  view->addSeparator();
+  view->addAction("Restore All Panels", this, [this]() {
+    for (QDockWidget* d : {static_cast<QDockWidget*>(palette_),
+                           static_cast<QDockWidget*>(hierarchy_),
+                           static_cast<QDockWidget*>(properties_),
+                           static_cast<QDockWidget*>(trends_)}) {
+      d->show();
+      d->setFloating(false);
+    }
+    addDockWidget(Qt::LeftDockWidgetArea, palette_);
+    addDockWidget(Qt::LeftDockWidgetArea, hierarchy_);
+    addDockWidget(Qt::RightDockWidgetArea, properties_);
+    addDockWidget(Qt::BottomDockWidgetArea, trends_);
+    resizeDocks({trends_}, {300}, Qt::Vertical);
   });
 
   QMenu* help = menuBar()->addMenu("&Help");

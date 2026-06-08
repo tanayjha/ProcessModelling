@@ -4,9 +4,10 @@ namespace umpnap {
 
 QString equationText(const std::string& type) {
   if (type == "Pipe")
-    return "Darcy-Weisbach + minor losses:\n"
-           "  ΔP = (f·L/D + ΣK)·ρv²/2·tuning\n"
+    return "Darcy-Weisbach + minor losses + static head:\n"
+           "  P_in−P_out = (f·L/D + ΣK)·ρv²/2·tuning + ρg·dZ\n"
            "  v = Q/A,  A = πD²/4  (D = ID)\n"
+           "  dZ = outlet elev − inlet elev (+ = outlet higher)\n"
            "  f: 64/Re (laminar) | Swamee-Jain (turbulent)\n"
            "Ref: Darcy-Weisbach; Colebrook-White.";
   if (type == "Valve")
