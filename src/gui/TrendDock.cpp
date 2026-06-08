@@ -1,7 +1,12 @@
 #include "gui/TrendDock.h"
 
+#include <QComboBox>
+#include <QFileDialog>
+#include <QHBoxLayout>
+#include <QInputDialog>
+#include <QLabel>
 #include <QListWidget>
-#include <QSplitter>
+#include <QPushButton>
 #include <QVBoxLayout>
 #include <algorithm>
 #include <cmath>
@@ -22,14 +27,66 @@ TrendDock::TrendDock(Results* results, QWidget* parent)
     : QDockWidget("Trends", parent), results_(results) {
   auto* container = new QWidget(this);
   auto* layout = new QVBoxLayout(container);
+
+  // Controls: time window + export. (Double-click a signal to set its Y range.)
+  auto* controls = new QHBoxLayout();
+  controls->addWidget(new QLabel("View", container));
+  auto* windowBox = new QComboBox(container);
+  windowBox->addItems({"All", "1 min", "5 min", "10 min", "20 min"});
+  connect(windowBox, &QComboBox::currentTextChanged, this, [this](const QString& t) {
+    double secs = 0;
+    if (t == "1 min") secs = 60;
+    else if (t == "5 min") secs = 300;
+    else if (t == "10 min") secs = 600;
+    else if (t == "20 min") secs = 1200;
+    plot_->setTimeWindow(secs);
+  });
+  controls->addWidget(windowBox);
+  controls->addStretch();
+  auto* exportBtn = new QPushButton("Export PNG…", container);
+  connect(exportBtn, &QPushButton::clicked, this, &TrendDock::exportImage);
+  controls->addWidget(exportBtn);
+  layout->addLayout(controls);
+
   list_ = new QListWidget(container);
   list_->setSelectionMode(QAbstractItemView::MultiSelection);
-  list_->setMaximumHeight(140);
+  list_->setMaximumHeight(120);
+  list_->setToolTip("Click to plot; double-click to set a fixed Y-axis range.");
   plot_ = new TrendWidget(container);
   layout->addWidget(list_);
   layout->addWidget(plot_, 1);
   setWidget(container);
   connect(list_, &QListWidget::itemSelectionChanged, this, &TrendDock::updatePlot);
+  connect(list_, &QListWidget::itemDoubleClicked, this, &TrendDock::onDoubleClicked);
+}
+
+void TrendDock::onDoubleClicked(QListWidgetItem* item) {
+  std::string key = item->text().toStdString();
+  // Seed the dialog from the data's current extent.
+  double lo = 0, hi = 1;
+  if (const auto* s = results_->series(key); s && !s->empty()) {
+    lo = hi = s->front().second;
+    for (const auto& tv : *s) { lo = std::min(lo, tv.second); hi = std::max(hi, tv.second); }
+  }
+  auto it = ranges_.find(key);
+  if (it != ranges_.end()) { lo = it->second.first; hi = it->second.second; }
+  bool ok = false;
+  double ymin = QInputDialog::getDouble(this, "Y range — " + item->text(),
+                                        "Min (Cancel = auto):", lo, -1e12, 1e12, 4, &ok);
+  if (!ok) { ranges_.erase(key); updatePlot(); return; }  // cancel -> auto
+  double ymax = QInputDialog::getDouble(this, "Y range — " + item->text(),
+                                        "Max:", hi, -1e12, 1e12, 4, &ok);
+  if (!ok) return;
+  if (ymax > ymin) ranges_[key] = {ymin, ymax};
+  updatePlot();
+}
+
+void TrendDock::exportImage() {
+  QString path = QFileDialog::getSaveFileName(this, "Export Trend", QString(),
+                                              "PNG (*.png)");
+  if (path.isEmpty()) return;
+  if (!path.endsWith(".png")) path += ".png";
+  plot_->grab().save(path);
 }
 
 void TrendDock::refreshKeys() {
@@ -83,6 +140,12 @@ void TrendDock::updatePlot() {
     s.label = item->text();
     s.color = kPalette[ci % 8];
     s.data = *data;
+    auto r = ranges_.find(key);
+    if (r != ranges_.end()) {
+      s.hasRange = true;
+      s.ymin = r->second.first;
+      s.ymax = r->second.second;
+    }
     series.push_back(std::move(s));
     ++ci;
   }
