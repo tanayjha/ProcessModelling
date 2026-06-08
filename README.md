@@ -84,6 +84,27 @@ configurable, tagged P&ID symbols. Each draws its standard glyph.
 
 ![Symbol gallery](docs/umpnap_gallery.png)
 
+### Multi-domain modeling, media & validation
+
+- **Library-grouped palette** — components are organised under Hydraulic /
+  Air-Gas / Steam / Electrical / Instrumentation & Control; each type appears
+  only under its library.
+- **Per-port medium typing + connection validation** — every port has a medium
+  (liquid/gas/steam/electrical/signal; process ports follow the fluid). Wiring
+  rejects incompatible connections (e.g. a water boundary into an air duct) with
+  a reason in the status bar.
+- **Multi-fluid vessels** — Tank/PressurizedTank have a separate **cover-gas
+  tapping** with its own gas fluid, so an air/gas network can attach to the
+  vapour space. Steam equipment (Steam Generator, Turbine, Condenser, Deaerator,
+  ASDV, CSDV) carries correct feedwater/steam/blowdown ports.
+- **Named valve characteristics** — Linear / Equal-percentage / Quick-opening
+  dropdown (in both the property editor and the datasheet).
+- **P&ID tag search** in the toolbar — jump to any component by tag and view its
+  data without loading from file.
+- **Trend tools** — hover readout of values, a configurable view window
+  (1/5/10/20 min), per-signal Y-axis range (double-click a signal), and PNG
+  export.
+
 > **Scope / roadmap.** This is a working core of the full digital-plant vision,
 > not the whole thing. Delivered: the simulation engine, runtime monitoring,
 > snapshots/initial conditions, a validated hydraulic+pneumatic nodal solver,
