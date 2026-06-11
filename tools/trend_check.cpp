@@ -34,6 +34,7 @@ int main(int argc, char** argv) {
   // Render the REAL TrendDock the way the GUI uses it: refreshKeys() now
   // auto-selects the varying signals, so a curve should appear with no clicks.
   TrendDock dock(&res);
+  dock.setNetwork(&net);  // label signals by P&ID tag, as the GUI does
   dock.resize(680, 360);
   dock.refreshKeys();
 

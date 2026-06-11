@@ -36,6 +36,12 @@ class Network {
   int nextId() const { return nextId_; }
   void setNextId(int v) { nextId_ = v; }
 
+  // Deep-copy support for undo: clone() returns an independent copy; copyFrom()
+  // replaces this network's contents in place (preserving the object identity
+  // that scenes/solvers hold a pointer to).
+  std::unique_ptr<Network> clone() const;
+  void copyFrom(const Network& other);
+
  private:
   std::vector<std::unique_ptr<Component>> comps_;
   std::vector<Connection> conns_;

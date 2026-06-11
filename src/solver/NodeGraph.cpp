@@ -1,9 +1,34 @@
 #include "solver/NodeGraph.h"
 
+#include <algorithm>
+
 #include "components/hydraulic/BranchLaw.h"
 #include "core/FluidLibrary.h"
 
 namespace umpnap {
+
+std::string nodeTagLabel(const std::map<std::pair<int, std::string>, int>& portNode,
+                         int node, const Network& net) {
+  std::vector<std::string> tags;
+  for (const auto& kv : portNode) {
+    if (kv.second != node) continue;
+    const Component* c = net.component(kv.first.first);
+    if (!c || c->name.empty()) continue;
+    if (std::find(tags.begin(), tags.end(), c->name) == tags.end())
+      tags.push_back(c->name);
+  }
+  std::sort(tags.begin(), tags.end());
+  std::string s;
+  for (const auto& t : tags) {
+    if (!s.empty()) s += "+";
+    s += t;
+  }
+  return s;
+}
+
+std::string NodeGraph::nodeLabel(int node, const Network& net) const {
+  return nodeTagLabel(portNode, node, net);
+}
 
 namespace {
 constexpr double kG = 9.80665;

@@ -1,7 +1,14 @@
 #pragma once
 #include "solver/ISolver.h"
+#include "solver/NodeGraph.h"
 
 namespace umpnap {
+
+// Clusters the electrical-medium ports into dense nodes (union over connections,
+// busbars and closed breakers), matching the numbering used to key
+// elecnode.<n>.* signals. Exposed so the trend display can label each bus by the
+// tags of its connected equipment.
+PortNodeMap buildElecPortNodes(const Network& net);
 
 // Linear DC / resistive power-flow solver (modified nodal analysis). Genuinely
 // solves V = I*R over the electrical-medium subnetwork:

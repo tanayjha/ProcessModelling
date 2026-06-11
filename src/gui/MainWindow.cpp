@@ -109,6 +109,7 @@ Document* MainWindow::addDocument(std::unique_ptr<Network> net,
     if (d == activeDoc()) properties_->showComponent(c);
   });
   connect(d->scene, &DiagramScene::networkChanged, this, [this, d]() {
+    bankUndo(d);
     if (d == activeDoc()) hierarchy_->refresh(d->net.get());
   });
   connect(d->scene, &DiagramScene::connectionRejected, this,
@@ -119,6 +120,7 @@ Document* MainWindow::addDocument(std::unique_ptr<Network> net,
 
   d->scene->rebuildFromNetwork();
   d->sim->captureInitial();
+  d->lastSnapshot = d->net->clone();  // undo baseline
 
   docs_.push_back(std::move(doc));
   QString label = (integrated ? QString("▣ ") : QString()) + title;
@@ -143,7 +145,10 @@ void MainWindow::bindActiveDocument() {
   if (!d) return;
   properties_->showComponent(d->selected);
   hierarchy_->refresh(d->net.get());
-  if (trends_) trends_->setResults(d->results.get());
+  if (trends_) {
+    trends_->setNetwork(d->net.get());
+    trends_->setResults(d->results.get());
+  }
   updateClock(d);
   // Bring the diagram into view (loaded components sit at saved coordinates).
   QRectF r = d->scene->itemsBoundingRect();
@@ -195,6 +200,8 @@ void MainWindow::onSimUpdated(Document* d) {
 
 void MainWindow::onSimModeChanged(Document* d) {
   onSimUpdated(d);
+  // Lock topology edits (delete of components/wires) while the engine runs.
+  d->scene->setEditable(d->sim->mode() != SimController::Running);
   if (d != activeDoc()) return;
   const char* m = d->sim->mode() == SimController::Running ? "Running"
                   : d->sim->mode() == SimController::Paused
@@ -261,6 +268,8 @@ void MainWindow::buildMenus() {
   file->addAction("&Quit", this, &QWidget::close);
 
   QMenu* edit = menuBar()->addMenu("&Edit");
+  edit->addAction("&Undo", QKeySequence::Undo, this, &MainWindow::undo);
+  edit->addSeparator();
   edit->addAction("&Plant Data...", this, &MainWindow::openPlantData);
   edit->addAction("&Clone Selected", QKeySequence("Ctrl+D"), this,
                   &MainWindow::cloneSelected);
@@ -404,9 +413,36 @@ void MainWindow::cloneSelected() {
   c->y = d->selected->y + 40;
   QString name = QString::fromStdString(d->selected->name);
   d->net->addComponent(std::move(c));
+  bankUndo(d);
   d->scene->rebuildFromNetwork();
   hierarchy_->refresh(d->net.get());
   statusBar()->showMessage("Cloned " + name);
+}
+
+// Bank the pre-edit state for undo. Called after each committed topology edit;
+// `lastSnapshot` holds the state prior to this edit, so it becomes the target an
+// undo restores. Editable mimics only — the integrated tab is regenerated.
+void MainWindow::bankUndo(Document* d) {
+  if (!d || d->integrated) return;
+  if (d->lastSnapshot) d->undoStack.push_back(std::move(d->lastSnapshot));
+  d->lastSnapshot = d->net->clone();
+  if (d->undoStack.size() > 100) d->undoStack.erase(d->undoStack.begin());
+}
+
+void MainWindow::undo() {
+  Document* d = activeDoc();
+  if (!d || d->integrated || d->undoStack.empty()) {
+    statusBar()->showMessage("Nothing to undo.", 2000);
+    return;
+  }
+  d->net->copyFrom(*d->undoStack.back());
+  d->undoStack.pop_back();
+  d->lastSnapshot = d->net->clone();
+  d->selected = nullptr;
+  d->scene->rebuildFromNetwork();   // does not emit networkChanged
+  hierarchy_->refresh(d->net.get());
+  properties_->showComponent(nullptr);
+  statusBar()->showMessage("Undid last edit.", 3000);
 }
 
 void MainWindow::saveInitialCondition() {
@@ -480,6 +516,8 @@ void MainWindow::openPath(const QString& path) {
     d->scene->rebuildFromNetwork();
     d->scene->clearRuntime();
     d->sim->captureInitial();
+    d->undoStack.clear();
+    d->lastSnapshot = d->net->clone();  // fresh undo baseline for the loaded net
     tabs_->setTabText(0, title);
     bindActiveDocument();
     refreshProjectDock();

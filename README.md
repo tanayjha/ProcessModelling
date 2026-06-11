@@ -170,9 +170,14 @@ moderator/service-water pair coupled across mimics by one split HX.
   dropdown (in both the property editor and the datasheet).
 - **P&ID tag search** in the toolbar — jump to any component by tag and view its
   data without loading from file.
-- **Trend tools** — hover readout of values, a configurable view window
-  (1/5/10/20 min), per-signal Y-axis range (double-click a signal), and PNG
-  export.
+- **Trend tools** — signals are listed and plotted **by P&ID tag** (e.g.
+  `P-101.flow`, `TK-1.pressure`; a shared bus reads as the joined tags of its
+  equipment, `SG-1+TUR-2.pressure`), with hover readout of values, a configurable
+  view window (1/5/10/20 min), per-signal Y-axis range (double-click a signal),
+  and PNG export.
+- **Safe editing** — `Edit ▸ Undo` (Ctrl+Z) reverts mimic edits (add / delete /
+  wire / move); deletes prompt for confirmation; topology edits are locked while
+  the simulation is running (pause or stop first).
 
 > **Scope / roadmap.** This is a working core of the full digital-plant vision,
 > not the whole thing. Delivered: the simulation engine, runtime monitoring,

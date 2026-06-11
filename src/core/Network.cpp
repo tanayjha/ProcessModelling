@@ -107,6 +107,20 @@ void Network::clear() {
   nextId_ = 1;
 }
 
+void Network::copyFrom(const Network& other) {
+  comps_.clear();
+  for (const auto& c : other.comps_)
+    comps_.push_back(std::make_unique<Component>(*c));
+  conns_ = other.conns_;
+  nextId_ = other.nextId_;
+}
+
+std::unique_ptr<Network> Network::clone() const {
+  auto n = std::make_unique<Network>();
+  n->copyFrom(*this);
+  return n;
+}
+
 std::string Network::validate() const {
   if (comps_.empty()) return "Network is empty.";
 

@@ -2,7 +2,9 @@
 
 #include <QGraphicsLineItem>
 #include <QGraphicsSceneMouseEvent>
+#include <QGraphicsView>
 #include <QKeyEvent>
+#include <QMessageBox>
 #include <QPen>
 #include <tuple>
 
@@ -180,6 +182,11 @@ void DiagramScene::mousePressEvent(QGraphicsSceneMouseEvent* e) {
     }
   }
 
+  // Falling through to a plain press may begin a drag-move; snapshot positions
+  // so a completed move can be reported on release (for undo capture).
+  movePressPos_.clear();
+  for (auto* it : items_)
+    movePressPos_[it->comp()->id] = QPointF(it->comp()->x, it->comp()->y);
   QGraphicsScene::mousePressEvent(e);
 }
 
@@ -228,6 +235,18 @@ void DiagramScene::mouseReleaseEvent(QGraphicsSceneMouseEvent* e) {
     return;
   }
   QGraphicsScene::mouseReleaseEvent(e);
+  // Detect a completed drag-move and report it once so it is undoable.
+  bool moved = false;
+  for (auto* it : items_) {
+    auto f = movePressPos_.find(it->comp()->id);
+    if (f != movePressPos_.end() &&
+        (f->second.x() != it->comp()->x || f->second.y() != it->comp()->y)) {
+      moved = true;
+      break;
+    }
+  }
+  movePressPos_.clear();
+  if (moved) emit networkChanged();
 }
 
 void DiagramScene::keyPressEvent(QKeyEvent* e) {
@@ -243,6 +262,33 @@ void DiagramScene::keyPressEvent(QKeyEvent* e) {
                            w->endB()->comp()->id, w->endB()->portName(w->portB()));
     }
     if (!compsToDelete.empty() || !wires.empty()) {
+      QWidget* parent = views().isEmpty() ? nullptr : views().first();
+      // Editing the topology while the engine is running would desync the live
+      // solve; require the simulation to be paused or stopped first.
+      if (!editable_) {
+        QMessageBox::information(
+            parent, "Simulation running",
+            "Stop or pause the simulation before deleting components or "
+            "connections.");
+        e->accept();
+        return;
+      }
+      // Confirm before any destructive edit to the mimic.
+      int n = (int)compsToDelete.size() + (int)wires.size();
+      QString what = compsToDelete.empty()
+                         ? QString("%1 connection(s)").arg(wires.size())
+                         : wires.empty()
+                               ? QString("%1 component(s)").arg(compsToDelete.size())
+                               : QString("%1 item(s)").arg(n);
+      if (QMessageBox::question(
+              parent, "Delete from mimic",
+              QString("Delete %1? This cannot be undone except via Edit ▸ Undo.")
+                  .arg(what),
+              QMessageBox::Yes | QMessageBox::No,
+              QMessageBox::No) != QMessageBox::Yes) {
+        e->accept();
+        return;
+      }
       // Remove selected wires by matching endpoints.
       for (const auto& wr : wires) {
         const auto& conns = net_->connections();

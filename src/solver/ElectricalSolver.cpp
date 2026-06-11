@@ -25,9 +25,7 @@ double cableR(const Component& c) {
 }
 }  // namespace
 
-SolveReport ElectricalSolver::solveSteady(Network& net, Results& out, double t) {
-  SolveReport rep;
-
+PortNodeMap buildElecPortNodes(const Network& net) {
   auto isElecPort = [&](const Component& c, const Port& p) {
     return effectiveMedium(c, p.name) == Medium::Electrical;
   };
@@ -41,12 +39,6 @@ SolveReport ElectricalSolver::solveSteady(Network& net, Results& out, double t) 
         portList.push_back({c->id, p.name});
       }
   }
-  if (portList.empty()) {
-    rep.converged = true;
-    rep.message = "No electrical network.";
-    return rep;
-  }
-
   std::vector<int> parent(portList.size());
   for (size_t i = 0; i < parent.size(); ++i) parent[i] = (int)i;
   std::function<int(int)> find = [&](int x) {
@@ -85,13 +77,27 @@ SolveReport ElectricalSolver::solveSteady(Network& net, Results& out, double t) 
     rootToNode[r] = id;
     return id;
   };
-  std::map<std::pair<int, std::string>, int> portNode;
-  for (size_t i = 0; i < portList.size(); ++i) portNode[portList[i]] = nodeFor((int)i);
+  PortNodeMap m;
+  for (size_t i = 0; i < portList.size(); ++i) m.portNode[portList[i]] = nodeFor((int)i);
+  m.nodeCount = (int)rootToNode.size();
+  return m;
+}
+
+SolveReport ElectricalSolver::solveSteady(Network& net, Results& out, double t) {
+  SolveReport rep;
+
+  PortNodeMap pn = buildElecPortNodes(net);
+  const auto& portNode = pn.portNode;
+  if (portNode.empty()) {
+    rep.converged = true;
+    rep.message = "No electrical network.";
+    return rep;
+  }
   auto nodeOf = [&](int comp, const std::string& port) -> int {
     auto it = portNode.find({comp, port});
     return it == portNode.end() ? -1 : it->second;
   };
-  int nNodes = (int)rootToNode.size();
+  int nNodes = pn.nodeCount;
 
   // Enumerate the extra MNA unknowns: voltage sources and ideal transformers.
   struct Src { int node; double v; int comp; };

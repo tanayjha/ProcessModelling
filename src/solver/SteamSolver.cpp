@@ -78,18 +78,15 @@ struct SteamBranch {
 
 }  // namespace
 
-SolveReport SteamSolver::solveSteady(Network& net, Results& out, double t) {
-  SolveReport rep;
-
-  // ---- Build the steam node graph (union steam ports across connections). ---
+PortNodeMap buildSteamPortNodes(const Network& net) {
   auto isSteamPort = [&](const Component& c, const Port& p) {
     return effectiveMedium(c, p.name) == Medium::Steam;
   };
-  std::map<std::pair<int, std::string>, int> portIndex;
-  std::vector<std::pair<int, std::string>> portList;
   auto participates = [](const std::string& ty) {
     return isSteamSource(ty) || isSteamSink(ty) || isSteamBranch(ty);
   };
+  std::map<std::pair<int, std::string>, int> portIndex;
+  std::vector<std::pair<int, std::string>> portList;
   for (const auto& c : net.components()) {
     if (!participates(c->type)) continue;
     for (const auto& p : c->ports)
@@ -98,12 +95,6 @@ SolveReport SteamSolver::solveSteady(Network& net, Results& out, double t) {
         portList.push_back({c->id, p.name});
       }
   }
-  if (portList.empty()) {
-    rep.converged = true;
-    rep.message = "No steam network.";
-    return rep;
-  }
-
   std::vector<int> parent(portList.size());
   for (size_t i = 0; i < parent.size(); ++i) parent[i] = (int)i;
   std::function<int(int)> find = [&](int x) {
@@ -125,9 +116,24 @@ SolveReport SteamSolver::solveSteady(Network& net, Results& out, double t) {
     rootToNode[r] = id;
     return id;
   };
-  std::map<std::pair<int, std::string>, int> portNode;
-  for (size_t i = 0; i < portList.size(); ++i) portNode[portList[i]] = nodeFor((int)i);
-  int nodeCount = (int)rootToNode.size();
+  PortNodeMap m;
+  for (size_t i = 0; i < portList.size(); ++i) m.portNode[portList[i]] = nodeFor((int)i);
+  m.nodeCount = (int)rootToNode.size();
+  return m;
+}
+
+SolveReport SteamSolver::solveSteady(Network& net, Results& out, double t) {
+  SolveReport rep;
+
+  // ---- Build the steam node graph (union steam ports across connections). ---
+  PortNodeMap pn = buildSteamPortNodes(net);
+  const auto& portNode = pn.portNode;
+  int nodeCount = pn.nodeCount;
+  if (portNode.empty()) {
+    rep.converged = true;
+    rep.message = "No steam network.";
+    return rep;
+  }
 
   std::vector<bool> fixed(nodeCount, false);
   std::vector<double> fixedP(nodeCount, 0.0);

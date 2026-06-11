@@ -156,6 +156,14 @@ integrated merged-run tab, project-tree explorer); **split shell-and-tube HX**
 temps); **steam solver** (compressible isothermal pressure-flow) and
 **electrical solver** (linear DC power-flow / MNA) that genuinely solve and feed
 trends. See `examples/multidomain.umpproj` via `make_multidomain`.
+**Trends label every signal by P&ID tag** (Results keys stay `node/comp/…`-indexed;
+`TrendDock` maps them for display via `Network` + node-label helpers
+`NodeGraph::nodeLabel` / `nodeTagLabel` and the exposed `buildSteamPortNodes` /
+`buildElecPortNodes`; the raw key rides on each list item's `UserRole`).
+**Mimic-editing safety:** `Edit ▸ Undo` (Ctrl+Z) reverts add/delete/wire/move via
+per-`Document` network snapshots (`Network::clone`/`copyFrom`, banked on each
+`networkChanged`); deletes prompt for confirmation; the scene is
+`setEditable(false)` while its sim is `Running`.
 
 **Deferred / requested but not yet built** (priority order for improvement work):
 1. **Engineering-unit switching** for display: flow (m³/s, kg/s, t/h), level

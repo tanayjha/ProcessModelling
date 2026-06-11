@@ -1,6 +1,8 @@
 #pragma once
 #include <QGraphicsScene>
+#include <QPointF>
 #include <QString>
+#include <map>
 #include <vector>
 
 #include "core/Network.h"
@@ -20,6 +22,9 @@ class DiagramScene : public QGraphicsScene {
   explicit DiagramScene(Network* net, QObject* parent = nullptr);
 
   void setArmedType(const QString& type) { armedType_ = type; }
+  // Editing (delete of components/wires) is blocked while the simulation runs;
+  // re-enabled when it is paused or stopped.
+  void setEditable(bool on) { editable_ = on; }
   void rebuildFromNetwork();   // recreate all items from net_
   void refreshConnections();   // reposition all wires
   void selectComponent(int id);
@@ -55,6 +60,11 @@ class DiagramScene : public QGraphicsScene {
   ComponentItem* srcItem_ = nullptr;
   int srcPort_ = -1;
   QGraphicsLineItem* tempLine_ = nullptr;
+
+  bool editable_ = true;
+  // Component positions captured on mouse-press, so a drag is detected on
+  // release and reported via networkChanged() (for undo capture).
+  std::map<int, QPointF> movePressPos_;
 };
 
 }  // namespace umpnap

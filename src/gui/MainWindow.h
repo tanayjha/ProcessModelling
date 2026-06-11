@@ -36,6 +36,11 @@ struct Document {
   QString path;                      // .umpnap path, or empty if unsaved
   bool integrated = false;           // the merged plant run tab
   std::vector<Document*> members;    // integrated: the member mimic documents
+
+  // Undo: each committed edit pushes the prior network state. `lastSnapshot`
+  // mirrors the current committed state so the next edit can bank it.
+  std::vector<std::unique_ptr<Network>> undoStack;
+  std::unique_ptr<Network> lastSnapshot;
 };
 
 class MainWindow : public QMainWindow {
@@ -59,6 +64,7 @@ class MainWindow : public QMainWindow {
   void runValidation();
   void openPlantData();
   void cloneSelected();
+  void undo();
   void saveInitialCondition();
   void loadInitialCondition();
   void about();
@@ -73,6 +79,7 @@ class MainWindow : public QMainWindow {
   Document* activeDoc();
   SimController* activeSim();
   void bindActiveDocument();
+  void bankUndo(Document* d);  // push prior state onto the doc's undo stack
   void refreshProjectDock();
   void rebuildIntegrated(Document* doc);
   void onSimUpdated(Document* d);

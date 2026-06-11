@@ -1,7 +1,13 @@
 #pragma once
 #include "solver/ISolver.h"
+#include "solver/NodeGraph.h"
 
 namespace umpnap {
+
+// Clusters the steam-medium ports into dense nodes (union over connections),
+// matching the numbering used to key steamnode.<n>.* signals. Exposed so the
+// trend display can label each steam bus by the tags of its equipment.
+PortNodeMap buildSteamPortNodes(const Network& net);
 
 // Pragmatic compressible steam network solver. Solves a nodal PRESSURE balance
 // over the steam-medium subnetwork (ports whose effective medium is Steam),

@@ -7,12 +7,18 @@
 #include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
+#include <QListWidgetItem>
 #include <QVBoxLayout>
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
+#include "core/Network.h"
 #include "core/Results.h"
 #include "gui/TrendWidget.h"
+#include "solver/ElectricalSolver.h"
+#include "solver/NodeGraph.h"
+#include "solver/SteamSolver.h"
 
 namespace umpnap {
 
@@ -21,7 +27,39 @@ const QColor kPalette[] = {
     QColor(31, 119, 180),  QColor(214, 39, 40),  QColor(44, 160, 44),
     QColor(148, 103, 189), QColor(255, 127, 14), QColor(140, 86, 75),
     QColor(23, 190, 207),  QColor(227, 119, 194)};
+
+constexpr int kKeyRole = Qt::UserRole;  // raw Results key stored on each item
 }  // namespace
+
+std::string TrendDock::itemKey(const QListWidgetItem* it) {
+  return it->data(kKeyRole).toString().toStdString();
+}
+
+QString TrendDock::prettyLabel(const std::string& rawKey) const {
+  if (!net_) return QString::fromStdString(rawKey);
+  auto p1 = rawKey.find('.');
+  if (p1 == std::string::npos) return QString::fromStdString(rawKey);
+  auto p2 = rawKey.find('.', p1 + 1);
+  if (p2 == std::string::npos) return QString::fromStdString(rawKey);
+  std::string prefix = rawKey.substr(0, p1);
+  int idx = std::atoi(rawKey.substr(p1 + 1, p2 - p1 - 1).c_str());
+  std::string rest = rawKey.substr(p2 + 1);
+
+  std::string tag;
+  if (prefix == "comp") {
+    if (const Component* c = net_->component(idx)) tag = c->name;
+  } else if (prefix == "node") {
+    tag = buildNodeGraph(*net_).nodeLabel(idx, *net_);
+  } else if (prefix == "steamnode") {
+    PortNodeMap m = buildSteamPortNodes(*net_);
+    tag = nodeTagLabel(m.portNode, idx, *net_);
+  } else if (prefix == "elecnode") {
+    PortNodeMap m = buildElecPortNodes(*net_);
+    tag = nodeTagLabel(m.portNode, idx, *net_);
+  }
+  if (tag.empty()) return QString::fromStdString(rawKey);  // unknown -> raw key
+  return QString::fromStdString(tag + "." + rest);
+}
 
 TrendDock::TrendDock(Results* results, QWidget* parent)
     : QDockWidget("Trends", parent), results_(results) {
@@ -61,7 +99,7 @@ TrendDock::TrendDock(Results* results, QWidget* parent)
 }
 
 void TrendDock::onDoubleClicked(QListWidgetItem* item) {
-  std::string key = item->text().toStdString();
+  std::string key = itemKey(item);
   // Seed the dialog from the data's current extent.
   double lo = 0, hi = 1;
   if (const auto* s = results_->series(key); s && !s->empty()) {
@@ -98,8 +136,10 @@ void TrendDock::setResults(Results* results) {
 
 void TrendDock::refreshKeys() {
   list_->clear();
-  for (const auto& k : results_->keys())
-    list_->addItem(QString::fromStdString(k));
+  for (const auto& k : results_->keys()) {
+    auto* item = new QListWidgetItem(prettyLabel(k), list_);
+    item->setData(kKeyRole, QString::fromStdString(k));
+  }
 
   // Auto-select signals that actually change, so a curve appears immediately
   // after a run without the user having to know to click. Capped to avoid
@@ -107,7 +147,7 @@ void TrendDock::refreshKeys() {
   int selected = 0;
   for (int i = 0; i < list_->count() && selected < 4; ++i) {
     auto* item = list_->item(i);
-    const auto* s = results_->series(item->text().toStdString());
+    const auto* s = results_->series(itemKey(item));
     if (!s || s->size() < 2) continue;
     double lo = s->front().second, hi = s->front().second;
     for (const auto& tv : *s) {
@@ -140,7 +180,7 @@ void TrendDock::updatePlot() {
   std::vector<TrendWidget::Series> series;
   int ci = 0;
   for (auto* item : list_->selectedItems()) {
-    std::string key = item->text().toStdString();
+    std::string key = itemKey(item);
     const auto* data = results_->series(key);
     if (!data) continue;
     TrendWidget::Series s;
