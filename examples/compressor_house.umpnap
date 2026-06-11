@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "nextId": 7,
+  "components": [
+    {"id": 1, "type": "Boundary", "name": "BND-1", "domain": "Hydraulic", "x": 60, "y": 80, "fluid": "Air", "params": {"elevation": 0, "pressure": 101300}},
+    {"id": 2, "type": "Compressor", "name": "K-101", "domain": "Hydraulic", "x": 250, "y": 80, "fluid": "Air", "params": {"efficiency": 0.75, "ratedFlow": 0.5, "ratedHead": 300, "shutoffHead": 400, "speedRatio": 1}},
+    {"id": 3, "type": "Motor", "name": "M-101", "domain": "Electrical", "x": 250, "y": 260, "fluid": "Light Water", "params": {"efficiency": 0.92, "rating": 75, "voltage": 415}},
+    {"id": 4, "type": "AirReceiver", "name": "AR-101", "domain": "Hydraulic", "x": 480, "y": 80, "fluid": "Air", "params": {"diameter": 1, "elevation": 0, "height": 2.5, "level": 0, "p_top": 103000}, "config": {"linkTag": "AR-PLANT-1"}},
+    {"id": 5, "type": "GasReliefValve", "name": "PSV-101", "domain": "Hydraulic", "x": 480, "y": 320, "fluid": "Air", "params": {"Kv": 300, "blowdown": 50000, "elevation": 0, "position": 0, "setpoint": 500000}},
+    {"id": 6, "type": "Boundary", "name": "BND-6", "domain": "Hydraulic", "x": 700, "y": 320, "fluid": "Air", "params": {"elevation": 0, "pressure": 101300}}
+  ],
+  "connections": [
+    {"compA": 1, "portA": "p", "compB": 2, "portB": "in"},
+    {"compA": 2, "portA": "out", "compB": 4, "portB": "n1"},
+    {"compA": 3, "portA": "t", "compB": 2, "portB": "drive"},
+    {"compA": 4, "portA": "n2", "compB": 5, "portB": "in"},
+    {"compA": 5, "portA": "out", "compB": 6, "portB": "p"}
+  ]
+}

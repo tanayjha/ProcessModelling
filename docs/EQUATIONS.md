@@ -59,6 +59,22 @@ sizing:   Q[m³/h] = Kv_eff · √( ΔP[bar] / SG ),  SG = ρ/ρ_water
 In SI as a resistance: `K = (10⁵·ρ/1000)·(3600/Kv_eff)²`.
 **Ref:** IEC 60534-2-1; ISA control-valve sizing.
 
+## Relief / safety valve — self-acting set pressure
+
+Design data: `setpoint` [Pa] (lift differential), `blowdown` [Pa] (proportional
+band), full-open `Kv` [m³/h/bar^0.5]. The valve is shut below the set pressure
+and lifts progressively over the blowdown band. Hydraulic `ReliefValve` and
+air/gas `GasReliefValve` share this law (only the default fluid differs).
+
+```
+lift fraction:   φ = clamp( (ΔP − setpoint) / blowdown , 0, 1 )
+installed coeff: Kv_eff = Kv · φ          (φ→0 ⇒ Kv_eff→0 ⇒ K→∞, i.e. shut)
+resistance:      K = (10⁵·ρ/1000)·(3600/Kv_eff)² ,  then  ΔP = K·Q·|Q|
+```
+Because `φ` depends on `ΔP = P_in − P_out`, it is re-evaluated every Newton
+iteration. Negative `ΔP` gives `φ = 0`, so the valve passes no reverse flow (it
+acts as a check). **Ref:** API 520/526 relief-valve sizing; IEC 60534-2-1.
+
 ## Orifice — ISO 5167 thin-plate metering
 
 Design data: bore `d`, upstream pipe bore `D`, discharge coefficient `Cd`.
@@ -160,7 +176,20 @@ a later phase.
 The pneumatic elements reuse the hydraulic laws with Air as the working fluid: a
 **Duct** is a Pipe, a **Damper** a Valve, and **Fan/Blower/Compressor** are pumps
 (head curve / affinity). A **Filter/Strainer** is a fixed resistance from a rated
-clean-element point, `K = ratedDP/ratedFlow²`. **PressurizedTank** and
-**AirReceiver** are vessels with the same node + inventory model as Tank, the top
-pressure being the blanket-gas pressure. Electrical components are configurable
-library symbols pending a power-flow solver.
+clean-element point, `K = ratedDP/ratedFlow²`. **PressurizedTank** is a vessel
+with the same node + inventory model as Tank, the top pressure being the
+blanket-gas pressure. The **AirReceiver** is a large plenum exposing 20 tappings
+(`p`, `n1…n19`); the node graph unions them all onto **one vessel pressure node**
+(pinned at `p_top`), so it behaves as a shared header for many compressors and
+consumers. Electrical components are configurable library symbols pending a
+power-flow solver.
+
+## Multi-mimic plant merge
+
+Several mimic networks are merged into one integrated network before solving.
+Components in different mimics that carry the same non-empty `linkTag` denote the
+same physical equipment and are unified into a single instance (first occurrence
+wins); all connections are rewired onto the survivors. The merged network is then
+solved by the unchanged nodal formulation, so a shared receiver tied across files
+balances every subsystem's supply and demand in one solve. See
+[`MULTI_MIMIC.md`](MULTI_MIMIC.md).

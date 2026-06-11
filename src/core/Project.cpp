@@ -291,4 +291,94 @@ bool loadProject(Network& net, const std::string& path) {
   return true;
 }
 
+// ---------------------- Multi-mimic plant projects -------------------------
+
+bool savePlant(const PlantProject& proj, const std::string& path) {
+  std::ofstream f(path);
+  if (!f) return false;
+  f << "{\n";
+  f << "  \"version\": 1,\n";
+  f << "  \"name\": \"" << esc(proj.name) << "\",\n";
+  f << "  \"mimics\": [";
+  for (size_t i = 0; i < proj.mimics.size(); ++i) {
+    if (i) f << ", ";
+    f << "\"" << esc(proj.mimics[i]) << "\"";
+  }
+  f << "]\n}\n";
+  return true;
+}
+
+bool loadPlant(PlantProject& proj, const std::string& path) {
+  std::ifstream f(path);
+  if (!f) return false;
+  std::stringstream ss;
+  ss << f.rdbuf();
+  std::string text = ss.str();
+  Parser p(text);
+  JValue root = p.parse();
+  if (root.type != JValue::Obj) return false;
+  proj.name = root.strOr("name", "");
+  proj.mimics.clear();
+  const JValue* mimics = root.get("mimics");
+  if (mimics && mimics->type == JValue::Arr)
+    for (const auto& m : mimics->arr)
+      if (m.type == JValue::Str) proj.mimics.push_back(m.str);
+  return true;
+}
+
+Network mergeMimics(const std::vector<const Network*>& mimics) {
+  Network out;
+  std::map<std::string, int> canonicalByTag;  // linkTag -> surviving merged id
+  int mi = 0;
+  for (const Network* m : mimics) {
+    if (!m) { ++mi; continue; }
+    std::map<int, int> idMap;          // this mimic's old id -> merged id
+    const double yOff = mi * 720.0;    // stack subsystems into bands
+    for (const auto& c : m->components()) {
+      std::string tag = c->cfg("linkTag");
+      if (!tag.empty()) {
+        auto it = canonicalByTag.find(tag);
+        if (it != canonicalByTag.end()) {  // shared equipment already merged
+          idMap[c->id] = it->second;
+          continue;
+        }
+      }
+      auto copy = std::make_unique<Component>(*c);  // value-copy params/config
+      copy->y = c->y + yOff;
+      int newId = out.addComponent(std::move(copy));
+      idMap[c->id] = newId;
+      if (!tag.empty()) canonicalByTag[tag] = newId;
+    }
+    for (const auto& cn : m->connections()) {
+      auto a = idMap.find(cn.compA);
+      auto b = idMap.find(cn.compB);
+      if (a == idMap.end() || b == idMap.end()) continue;
+      out.connect(a->second, cn.portA, b->second, cn.portB);
+    }
+    ++mi;
+  }
+  return out;
+}
+
+bool loadPlantNetwork(Network& out, const std::string& projPath) {
+  PlantProject proj;
+  if (!loadPlant(proj, projPath)) return false;
+  // Resolve mimic paths relative to the manifest's directory.
+  std::string dir;
+  size_t slash = projPath.find_last_of("/\\");
+  if (slash != std::string::npos) dir = projPath.substr(0, slash + 1);
+
+  std::vector<std::unique_ptr<Network>> loaded;
+  std::vector<const Network*> ptrs;
+  for (const auto& rel : proj.mimics) {
+    std::string full = (rel.empty() || rel[0] == '/') ? rel : dir + rel;
+    auto n = std::make_unique<Network>();
+    if (!loadProject(*n, full)) continue;  // skip a missing/bad mimic
+    ptrs.push_back(n.get());
+    loaded.push_back(std::move(n));
+  }
+  out = mergeMimics(ptrs);
+  return true;
+}
+
 }  // namespace umpnap

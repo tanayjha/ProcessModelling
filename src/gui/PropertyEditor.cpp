@@ -8,6 +8,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QWidget>
+#include <set>
 
 #include "core/ComponentRegistry.h"
 #include "core/FluidLibrary.h"
@@ -161,6 +162,25 @@ void PropertyEditor::rebuild() {
     });
     form->addRow("Measured var", varBox);
     addCfg("Output valve tag", "output", "e.g. FCV-1");
+  }
+
+  // Shared-equipment link tag: components in different mimic files that carry
+  // the same link tag are merged into one instance when the plant project runs
+  // as a whole (e.g. a plant air receiver tapped by several subsystems).
+  {
+    static const std::set<std::string> shareable = {
+        "AirReceiver", "Header",          "Tank",
+        "PressurizedTank", "Boundary",    "Junction"};
+    if (shareable.count(comp_->type)) {
+      auto* edit = new QLineEdit(QString::fromStdString(comp_->cfg("linkTag")),
+                                 body_);
+      edit->setPlaceholderText("e.g. AR-PLANT-1 (shared across mimics)");
+      connect(edit, &QLineEdit::editingFinished, this, [this, edit]() {
+        if (comp_) comp_->config["linkTag"] = edit->text().toStdString();
+        emit edited();
+      });
+      form->addRow("Link tag", edit);
+    }
   }
 
   // Governing equations for this library model.

@@ -60,16 +60,16 @@ Engine (`src/`):
 | `core/ComponentRegistry.{h,cpp}` | **all library type definitions** (ports, params, tag prefix, default fluid) |
 | `core/FluidLibrary.{h,cpp}` | fluids (liquids incl. boron/Gd poisons, gases), `liquids()/gases()/isGas()` |
 | `core/Results.{h,cpp}` | time-series store + CSV |
-| `core/Project.{h,cpp}` | hand-rolled JSON save/load (`.umpnap`); serializes params, config, curves |
+| `core/Project.{h,cpp}` | hand-rolled JSON save/load (`.umpnap`); serializes params, config, curves; **plant projects** (`.umpproj` manifest, `mergeMimics` by `linkTag`, `loadPlantNetwork`) |
 | `core/CurveFit.{h,cpp}` | least-squares polyfit (pump head curve) |
 | `solver/LinAlg.{h,cpp}` | dense LU with partial pivoting |
-| `solver/NodeGraph.{h,cpp}` | collapse ports→nodes, pin boundary/tank pressures (+ tank cover-gas) |
+| `solver/NodeGraph.{h,cpp}` | collapse ports→nodes (only fluid-medium ports — signal/electrical/steam ports skipped), pin boundary/tank pressures (+ tank cover-gas), union AirReceiver tappings |
 | `solver/HydraulicSolver.{h,cpp}` | Newton-Raphson steady solve; records node P, branch Q, derived signals |
 | `solver/SolverManager.{h,cpp}` | `runSteady`, `runTransient`, `stepTransient` (one cycle) |
 | `solver/ControlSolver.{h,cpp}` | PI controllers → valve position each cycle (tag-linked) |
 | `solver/Validation.{h,cpp}` | analytical series+parallel check (matches solver ~5e-10) |
 | `solver/{ISolver.h,StubSolvers.h}` | solver interface + gas/thermal/electrical stubs |
-| `components/hydraulic/BranchLaw.{h,cpp}` | **branch physics** (pipe/valve/orifice/pump/HX/filter + pneumatic aliases), `isBranch`, `isTankType` |
+| `components/hydraulic/BranchLaw.{h,cpp}` | **branch physics** (pipe/valve/orifice/pump/HX/filter/relief + pneumatic aliases), `isBranch`, `isTankType` |
 
 GUI (`src/gui/`): `main.cpp` (CLI: `[project.umpnap] [--run]`), `MainWindow`
 (menus/toolbar/sim controls/search/View menu), `DiagramScene`+`DiagramItems`
@@ -130,23 +130,34 @@ medium validation; multi-fluid vessels (cover gas); library across hydraulic/
 air-gas/steam/electrical/instrument-control; named valve characteristics; plant-
 data datasheet ↔ property sync; PI control coupling; trends (hover/window/range/
 export); deletable wires; multi-select; View menu; elevation incl. signed pipe
-static head; library-grouped palette; tag search.
+static head; library-grouped palette; tag search; **relief/safety valves**
+(hydraulic + air/gas, self-acting); **typed valve actuators** (electric/manual/
+pneumatic-modulating/pneumatic-on-off) plus generic Actuator; **attachment links**
+(actuator→valve `act`, motor→pump `drive`; non-solving, gated by a medium filter
+in NodeGraph); **20-tap AirReceiver** (all tappings union to one vessel node);
+**integrated multi-mimic plant projects** (`.umpproj` manifest + `linkTag` merge
+→ one network solved in unison; engine `mergeMimics`/`loadPlantNetwork`, see
+`docs/MULTI_MIMIC.md` and `examples/plant.umpproj` via `make_plant`).
 
 **Deferred / requested but not yet built** (priority order for improvement work):
 1. Shell-and-tube **HX split** (separate shell/tube fluids & connections — needed
    for e.g. PHWR bleed-condenser cooling by process water).
-2. **Instrument/actuator → valve/pump attachment** links (signal connections).
-3. **Engineering-unit switching** for display: flow (m³/s, kg/s, t/h), level
+2. **Engineering-unit switching** for display: flow (m³/s, kg/s, t/h), level
    (mm/cm/m), pressure (bar/mbar/kPa/kg·cm⁻²).
-4. **Wildcard component search** → results list → plant-data popup (current
+3. **Wildcard component search** → results list → plant-data popup (current
    toolbar search only selects one).
-5. **Node numbers on the mimic diagram** + node renaming (correlate with trends).
-6. **Scalable components** (resize on canvas).
-7. **Runtime-state save/load to file** (in-memory snapshots + IC files exist;
+4. **Node numbers on the mimic diagram** + node renaming (correlate with trends).
+5. **Scalable components** (resize on canvas).
+6. **Runtime-state save/load to file** (in-memory snapshots + IC files exist;
    add named on-disk runtime snapshots).
-8. **Dedicated solvers:** electrical power-flow; two-phase/steam thermo.
-9. **Library benchmark pass** vs leading simulators to complete parameter sets &
-   reflect them in the equations.
+7. **Dynamically-coupled actuators** (drive links are topological today — make
+   actuator stroke/fail-action move the linked valve during transients).
+8. **Per-mimic GUI tabs / project tree** for plant projects (engine merge +
+   `.umpproj` manifest exist; add multi-document UI on top).
+9. **Dedicated solvers:** electrical power-flow; two-phase/steam thermo; true
+   compressible gas-inventory receiver dynamics.
+10. **Library benchmark pass** vs leading simulators to complete parameter sets &
+    reflect them in the equations.
 
 When picking up an improvement request, check this list first; if it matches a
 roadmap item, implement it and move it to "working".

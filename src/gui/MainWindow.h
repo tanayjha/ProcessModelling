@@ -24,8 +24,11 @@ class MainWindow : public QMainWindow {
  public:
   MainWindow();
 
-  // Load a project from a path (used for command-line opening on launch).
+  // Load a single mimic project from a path (command-line opening on launch).
   void openPath(const QString& path);
+  // Load a multi-mimic plant project (.umpproj): merges all member mimics into
+  // one integrated network so the whole plant simulates in unison.
+  void openPlantPath(const QString& path);
   // Start the simulation engine running.
   void startSimulation();
 

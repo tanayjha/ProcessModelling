@@ -36,8 +36,16 @@ void drawSymbol(QPainter* p, const std::string& type, const Component& c,
     // Source/sink: circle.
     p->drawEllipse(QPointF(cx, cy), r, r);
 
-  } else if (type == "Tank" || type == "PressurizedTank" ||
-             type == "AirReceiver") {
+  } else if (type == "AirReceiver") {
+    // Horizontal pressure drum spanning the wide footprint (many nozzles).
+    QRectF body(g.left() + 4, cy - r * 0.7, g.width() - 8, r * 1.4);
+    p->drawRoundedRect(body, r * 0.6, r * 0.6);
+    QFont f = p->font();
+    f.setBold(true);
+    p->setFont(f);
+    p->drawText(body, Qt::AlignCenter, "AIR");
+
+  } else if (type == "Tank" || type == "PressurizedTank") {
     // Vertical cylinder with a liquid level line.
     QRectF body(cx - r, g.top() + 2, 2 * r, g.height() - 4);
     double ry = std::min(8.0, body.height() / 4);
@@ -83,6 +91,28 @@ void drawSymbol(QPainter* p, const std::string& type, const Component& c,
     bow2 << QPointF(g.right() - 2, cy - r) << QPointF(cx, cy)
          << QPointF(g.right() - 2, cy + r);
     p->drawPolygon(bow2);
+
+  } else if (type == "ReliefValve" || type == "GasReliefValve") {
+    // Angle relief valve: a bowtie body with a spring coil on the bonnet.
+    QPolygonF bow;
+    bow << QPointF(g.left() + 2, cy - r * 0.7) << QPointF(cx, cy)
+        << QPointF(g.left() + 2, cy + r * 0.7);
+    p->drawPolygon(bow);
+    QPolygonF bow2;
+    bow2 << QPointF(g.right() - 2, cy - r * 0.7) << QPointF(cx, cy)
+         << QPointF(g.right() - 2, cy + r * 0.7);
+    p->drawPolygon(bow2);
+    // Spring zig-zag above the stem (the self-acting set pressure).
+    QPainterPath spring;
+    double sy0 = g.top() + 2, sy1 = cy - r * 0.2, sx = cx;
+    spring.moveTo(sx, sy1);
+    int z = 4;
+    for (int i = 0; i < z; ++i) {
+      double yy = sy1 + (sy0 - sy1) * (i + 1) / z;
+      spring.lineTo(sx + ((i % 2) ? 5 : -5), yy);
+    }
+    p->setBrush(Qt::NoBrush);
+    p->drawPath(spring);
 
   } else if (type == "Orifice") {
     // Pipe run with a thin plate (gap) across it.
@@ -183,11 +213,36 @@ void drawSymbol(QPainter* p, const std::string& type, const Component& c,
     p->drawLine(QPointF(cx - r * 0.2, cy), QPointF(cx + r * 0.6, cy - r * 0.7));
     p->drawLine(QPointF(cx + r * 0.2, cy), QPointF(cx + r, cy));
 
-  } else if (type == "Actuator") {
-    // Diaphragm actuator: dome on a short stem.
+  } else if (type == "Actuator" || type == "PneumaticActuatorModulating" ||
+             type == "PneumaticActuatorOnOff") {
+    // Pneumatic diaphragm actuator: dome on a short stem.
     QRectF dome(cx - r * 0.8, g.top() + 2, r * 1.6, r);
     p->drawChord(dome, 0, 180 * 16);
     p->drawLine(QPointF(cx, dome.bottom()), QPointF(cx, g.bottom() - 2));
+    QFont f = p->font();
+    f.setBold(true);
+    p->setFont(f);
+    // Modulating carries a positioner "P"; on/off a solenoid "S".
+    if (type == "PneumaticActuatorModulating")
+      p->drawText(dome, Qt::AlignCenter, "P");
+    else if (type == "PneumaticActuatorOnOff")
+      p->drawText(dome, Qt::AlignCenter, "S");
+
+  } else if (type == "ElectricActuator") {
+    // Motor-operated actuator: a small motor circle on a stem.
+    double mr = r * 0.55;
+    p->drawEllipse(QPointF(cx, g.top() + 2 + mr), mr, mr);
+    p->drawLine(QPointF(cx, g.top() + 2 + 2 * mr), QPointF(cx, g.bottom() - 2));
+    QFont f = p->font();
+    f.setBold(true);
+    p->setFont(f);
+    p->drawText(QRectF(cx - mr, g.top() + 2, 2 * mr, 2 * mr), Qt::AlignCenter, "M");
+
+  } else if (type == "ManualActuator") {
+    // Handwheel: a flat ellipse with a hub on a stem.
+    QRectF wheel(cx - r * 0.9, g.top() + 4, r * 1.8, r * 0.5);
+    p->drawEllipse(wheel);
+    p->drawLine(QPointF(cx, wheel.center().y()), QPointF(cx, g.bottom() - 2));
 
   } else if (c.domain == Domain::Electrical || c.domain == Domain::Instrument ||
              c.domain == Domain::Control) {
@@ -220,6 +275,8 @@ ComponentItem::ComponentItem(Component* c) : comp_(c) {
   setFlag(ItemIsMovable, true);
   setFlag(ItemIsSelectable, true);
   setFlag(ItemSendsGeometryChanges, true);
+  // The air receiver carries up to 20 nozzles, so it needs a wide footprint.
+  if (c->type == "AirReceiver") w_ = 440.0;
   setPos(c->x, c->y);
   setZValue(1);
   layoutPorts();
@@ -237,14 +294,20 @@ void ComponentItem::layoutPorts() {
     }
   }
   // Gas/steam bidirectional tappings (e.g. tank cover gas) go on the top edge;
-  // other bidirectional ports go along the bottom.
+  // other bidirectional ports go along the bottom. The air receiver's many
+  // nozzles are split evenly between the top and bottom edges of its drum.
   std::vector<int> topPorts, bottomPorts;
-  for (int i : bidir) {
-    const Port& p = comp_->ports[i];
-    if (p.name == "gas" || p.medium == Medium::Gas || p.medium == Medium::Steam)
-      topPorts.push_back(i);
-    else
-      bottomPorts.push_back(i);
+  if (comp_->type == "AirReceiver") {
+    for (size_t k = 0; k < bidir.size(); ++k)
+      (k % 2 ? topPorts : bottomPorts).push_back(bidir[k]);
+  } else {
+    for (int i : bidir) {
+      const Port& p = comp_->ports[i];
+      if (p.name == "gas" || p.medium == Medium::Gas || p.medium == Medium::Steam)
+        topPorts.push_back(i);
+      else
+        bottomPorts.push_back(i);
+    }
   }
   auto placeSide = [&](const std::vector<int>& idxs, double xLocal) {
     int n = (int)idxs.size();

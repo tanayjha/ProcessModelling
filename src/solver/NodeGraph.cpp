@@ -37,11 +37,19 @@ NodeGraph buildNodeGraph(const Network& net) {
     return isBranch(t) || isTankType(t) || t == "Boundary" || t == "Junction" ||
            t == "Header";
   };
+  // Only fluid-carrying ports become pressure nodes. Signal/electrical/steam
+  // ports (e.g. a valve's actuator tapping or a pump's motor drive) are skipped
+  // so attachment links never create dangling equation-less nodes.
+  auto fluidPort = [](const Component& c, const Port& p) {
+    Medium m = effectiveMedium(c, p.name);
+    return m == Medium::Liquid || m == Medium::Gas;
+  };
   std::map<std::pair<int, std::string>, int> portIndex;
   std::vector<std::pair<int, std::string>> portList;
   for (const auto& c : net.components()) {
     if (!participates(c->type)) continue;
     for (const auto& p : c->ports) {
+      if (!fluidPort(*c, p)) continue;
       portIndex[{c->id, p.name}] = (int)portList.size();
       portList.push_back({c->id, p.name});
     }
@@ -56,13 +64,17 @@ NodeGraph buildNodeGraph(const Network& net) {
     auto b = portIndex.find({conn.compB, conn.portB});
     if (a != portIndex.end() && b != portIndex.end()) uf.unite(a->second, b->second);
   }
-  // Union all ports of each Junction (ideal zero-drop node).
+  // Union all ports of each Junction (ideal zero-drop node) and each
+  // AirReceiver (all tappings share one vessel pressure node).
   for (const auto& c : net.components()) {
-    if (c->type != "Junction") continue;
-    if (c->ports.empty()) continue;
-    int first = portIndex[{c->id, c->ports[0].name}];
-    for (size_t i = 1; i < c->ports.size(); ++i)
-      uf.unite(first, portIndex[{c->id, c->ports[i].name}]);
+    if (c->type != "Junction" && c->type != "AirReceiver") continue;
+    int first = -1;
+    for (const auto& p : c->ports) {
+      auto it = portIndex.find({c->id, p.name});
+      if (it == portIndex.end()) continue;
+      if (first < 0) first = it->second;
+      else uf.unite(first, it->second);
+    }
   }
 
   // Map union-find roots to dense node ids.

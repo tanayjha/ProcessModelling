@@ -83,6 +83,11 @@ void MainWindow::buildMenus() {
   QMenu* file = menuBar()->addMenu("&File");
   file->addAction("&New", this, &MainWindow::newProject);
   file->addAction("&Open...", this, &MainWindow::openProject);
+  file->addAction("Open &Plant Project...", this, [this]() {
+    QString path = QFileDialog::getOpenFileName(
+        this, "Open Plant Project", QString(), "UMPNAP Plant (*.umpproj)");
+    if (!path.isEmpty()) openPlantPath(path);
+  });
   file->addAction("&Save...", this, &MainWindow::saveProject_);
   file->addSeparator();
   file->addAction("Save &Initial Condition...", this,
@@ -300,6 +305,22 @@ void MainWindow::openPath(const QString& path) {
   properties_->showComponent(nullptr);
   sim_->captureInitial();
   statusBar()->showMessage("Opened " + path);
+}
+
+void MainWindow::openPlantPath(const QString& path) {
+  if (!loadPlantNetwork(net_, path.toStdString())) {
+    QMessageBox::warning(this, "Open Plant",
+                         "Failed to load plant project: " + path);
+    return;
+  }
+  scene_->rebuildFromNetwork();
+  scene_->clearRuntime();
+  hierarchy_->refresh(&net_);
+  properties_->showComponent(nullptr);
+  sim_->captureInitial();
+  statusBar()->showMessage(
+      "Opened integrated plant " + path +
+      " — all mimics merged; run to see whole-plant dynamics.");
 }
 
 void MainWindow::startSimulation() { sim_->start(); }

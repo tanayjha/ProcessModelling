@@ -1,5 +1,7 @@
 #include "core/ComponentRegistry.h"
 
+#include <string>
+
 namespace umpnap {
 
 ComponentRegistry& ComponentRegistry::instance() {
@@ -75,8 +77,10 @@ void registerHydraulicComponents() {
                     {"tuning", "-", 1.0, 0.0, 0.0}}});
 
   // Control valve sized by metric flow coefficient Kv with an inherent
-  // characteristic (0=linear, 1=equal-percentage, 2=quick-opening).
-  reg.registerDef({"Valve", H, "FCV", {{"in", IN}, {"out", OUT}},
+  // characteristic (0=linear, 1=equal-percentage, 2=quick-opening). The "act"
+  // signal port lets a valve actuator (manual/electric/pneumatic) be wired to it.
+  reg.registerDef({"Valve", H, "FCV",
+                   {{"in", IN}, {"out", OUT}, {"act", BI, SIG}},
                    {{"Kv", "m3/h/bar^0.5", 50.0, 1e-3, 0.0},
                     {"characteristic", "0/1/2", 1.0, 0.0, 2.0},
                     {"rangeability", "-", 50.0, 1.1, 0.0},
@@ -92,8 +96,9 @@ void registerHydraulicComponents() {
 
   // Centrifugal pump. Uses a fitted (Q,H) "head" curve if present, else builds
   // a quadratic from shutoff/rated datasheet points. speedRatio applies the
-  // affinity laws.
-  reg.registerDef({"Pump", H, "P", {{"in", IN}, {"out", OUT}},
+  // affinity laws. The "drive" electrical port accepts a driving Motor.
+  reg.registerDef({"Pump", H, "P",
+                   {{"in", IN}, {"out", OUT}, {"drive", BI, ELEC}},
                    {{"ratedFlow", "m3/s", 0.05, 0.0, 0.0},
                     {"ratedHead", "m", 50.0, 0.0, 0.0},
                     {"shutoffHead", "m", 65.0, 0.0, 0.0},
@@ -125,6 +130,17 @@ void registerHydraulicComponents() {
                     {"ratedDP", "Pa", 1.0e4, 0.0, 0.0},
                     {"elevation", "m", 0.0, 0.0, 0.0}}});
 
+  // Pressure relief / safety valve (self-acting). Stays shut until the
+  // differential P_in-P_out reaches `setpoint`, then opens progressively over
+  // the `blowdown` band up to its full flow coefficient Kv. Discharge is
+  // one-way (no reverse flow), so it also behaves as a check on reverse dP.
+  reg.registerDef({"ReliefValve", H, "PSV", {{"in", IN}, {"out", OUT}},
+                   {{"setpoint", "Pa", 8.0e5, 0.0, 0.0},
+                    {"blowdown", "Pa", 5.0e4, 1.0, 0.0},
+                    {"Kv", "m3/h/bar^0.5", 40.0, 1e-3, 0.0},
+                    {"position", "-", 0.0, 0.0, 1.0},
+                    {"elevation", "m", 0.0, 0.0, 0.0}}});
+
   // Header: large manifold node (multi-port, ideal — like a Junction).
   reg.registerDef({"Header", H, "HDR",
                    {{"a", BI}, {"b", BI}, {"c", BI}, {"d", BI}}, {}});
@@ -151,38 +167,62 @@ void registerHydraulicComponents() {
                     {"dZ", "m", 0.0, 0.0, 0.0},
                     {"tuning", "-", 1.0, 0.0, 0.0}},
                    "Air"});
-  reg.registerDef({"Damper", H, "DMP", {{"in", IN}, {"out", OUT}},
+  reg.registerDef({"Damper", H, "DMP",
+                   {{"in", IN}, {"out", OUT}, {"act", BI, SIG}},
                    {{"Kv", "m3/h/bar^0.5", 500.0, 1e-3, 0.0},
                     {"characteristic", "0/1/2", 0.0, 0.0, 2.0},
                     {"rangeability", "-", 30.0, 1.1, 0.0},
                     {"position", "-", 1.0, 0.0, 1.0}},
                    "Air"});
-  reg.registerDef({"Fan", H, "FAN", {{"in", IN}, {"out", OUT}},
+  reg.registerDef({"Fan", H, "FAN",
+                   {{"in", IN}, {"out", OUT}, {"drive", BI, ELEC}},
                    {{"ratedFlow", "m3/s", 2.0, 0.0, 0.0},
                     {"ratedHead", "m", 30.0, 0.0, 0.0},
                     {"shutoffHead", "m", 40.0, 0.0, 0.0},
                     {"efficiency", "-", 0.7, 0.0, 1.0},
                     {"speedRatio", "-", 1.0, 0.0, 0.0}},
                    "Air"});
-  reg.registerDef({"Blower", H, "BLW", {{"in", IN}, {"out", OUT}},
+  reg.registerDef({"Blower", H, "BLW",
+                   {{"in", IN}, {"out", OUT}, {"drive", BI, ELEC}},
                    {{"ratedFlow", "m3/s", 1.0, 0.0, 0.0},
                     {"ratedHead", "m", 80.0, 0.0, 0.0},
                     {"shutoffHead", "m", 100.0, 0.0, 0.0},
                     {"efficiency", "-", 0.7, 0.0, 1.0},
                     {"speedRatio", "-", 1.0, 0.0, 0.0}},
                    "Air"});
-  reg.registerDef({"Compressor", H, "CMP", {{"in", IN}, {"out", OUT}},
+  reg.registerDef({"Compressor", H, "CMP",
+                   {{"in", IN}, {"out", OUT}, {"drive", BI, ELEC}},
                    {{"ratedFlow", "m3/s", 0.5, 0.0, 0.0},
                     {"ratedHead", "m", 300.0, 0.0, 0.0},
                     {"shutoffHead", "m", 400.0, 0.0, 0.0},
                     {"efficiency", "-", 0.75, 0.0, 1.0},
                     {"speedRatio", "-", 1.0, 0.0, 0.0}},
                    "Air"});
-  reg.registerDef({"AirReceiver", H, "ARC", {{"p", BI}},
-                   {{"diameter", "m", 1.0, 1e-3, 0.0},
-                    {"height", "m", 2.5, 0.0, 0.0},
-                    {"level", "m", 0.0, 0.0, 0.0},
-                    {"p_top", "Pa", 7.0e5, 0.0, 0.0},
+  // Air receiver: a large plenum tying many compressors and consumers together.
+  // It exposes 20 interchangeable inflow/outflow tappings (p, n1..n19); the
+  // solver collapses them all onto one vessel pressure node. Set a shared
+  // `linkTag` to reference the SAME receiver across several mimic files.
+  {
+    std::vector<Port> arcPorts;
+    arcPorts.push_back({"p", BI});
+    for (int i = 1; i <= 19; ++i)
+      arcPorts.push_back({"n" + std::to_string(i), BI});
+    reg.registerDef({"AirReceiver", H, "ARC", arcPorts,
+                     {{"diameter", "m", 1.0, 1e-3, 0.0},
+                      {"height", "m", 2.5, 0.0, 0.0},
+                      {"level", "m", 0.0, 0.0, 0.0},
+                      {"p_top", "Pa", 7.0e5, 0.0, 0.0},
+                      {"elevation", "m", 0.0, 0.0, 0.0}},
+                     "Air"});
+  }
+
+  // Air/gas safety relief valve: protects receivers and pneumatic lines. Same
+  // self-acting law as the hydraulic relief valve but defaulting to a gas fluid.
+  reg.registerDef({"GasReliefValve", H, "PSV", {{"in", IN}, {"out", OUT}},
+                   {{"setpoint", "Pa", 8.5e5, 0.0, 0.0},
+                    {"blowdown", "Pa", 5.0e4, 1.0, 0.0},
+                    {"Kv", "m3/h/bar^0.5", 300.0, 1e-3, 0.0},
+                    {"position", "-", 0.0, 0.0, 1.0},
                     {"elevation", "m", 0.0, 0.0, 0.0}},
                    "Air"});
 
@@ -229,9 +269,34 @@ void registerHydraulicComponents() {
                     {"rangeMax", "eu", 100.0, 0.0, 0.0}}});
 
   // Valve actuator: failPosition 0=closed,1=open; type 0=pneumatic,1=motor.
+  // Wire the "sig" port to a valve/damper "act" port to record the drive link.
   reg.registerDef({"Actuator", I, "ACT", {{"sig", BI, SIG}},
                    {{"type", "0/1", 0.0, 0.0, 1.0},
                     {"strokeTime", "s", 5.0, 0.0, 0.0},
+                    {"failPosition", "-", 0.0, 0.0, 1.0}}});
+
+  // Typed valve actuators. All wire their "sig" port to a valve/damper "act"
+  // port. modulating=1 positions continuously (throttling); modulating=0 is
+  // open/shut (on-off). failPosition 0=closed, 1=open on loss of motive power.
+  // Electric (motor-operated, MOV).
+  reg.registerDef({"ElectricActuator", I, "MOV", {{"sig", BI, SIG}},
+                   {{"modulating", "0/1", 1.0, 0.0, 1.0},
+                    {"strokeTime", "s", 30.0, 0.0, 0.0},
+                    {"failPosition", "-", 0.0, 0.0, 1.0}}});
+  // Manual handwheel: operator-set, no automatic action.
+  reg.registerDef({"ManualActuator", I, "HW", {{"sig", BI, SIG}},
+                   {{"turnsToOpen", "-", 12.0, 0.0, 0.0}}});
+  // Pneumatic diaphragm actuator with positioner: continuous modulation.
+  reg.registerDef({"PneumaticActuatorModulating", I, "PA", {{"sig", BI, SIG}},
+                   {{"modulating", "0/1", 1.0, 1.0, 1.0},
+                    {"strokeTime", "s", 4.0, 0.0, 0.0},
+                    {"supplyP", "Pa", 4.0e5, 0.0, 0.0},
+                    {"failPosition", "-", 0.0, 0.0, 1.0}}});
+  // Pneumatic on/off actuator (solenoid piloted): open or shut only.
+  reg.registerDef({"PneumaticActuatorOnOff", I, "PAO", {{"sig", BI, SIG}},
+                   {{"modulating", "0/1", 0.0, 0.0, 0.0},
+                    {"strokeTime", "s", 1.5, 0.0, 0.0},
+                    {"supplyP", "Pa", 4.0e5, 0.0, 0.0},
                     {"failPosition", "-", 0.0, 0.0, 1.0}}});
 
   // Process switch (pressure/level/flow/temp): trips at a setpoint.

@@ -3,8 +3,9 @@
 
 #include "gui/MainWindow.h"
 
-// Usage: umpnap [project.umpnap] [--run]
-//   Optionally opens a project on launch and starts the simulation.
+// Usage: umpnap [project.umpnap | plant.umpproj] [--run]
+//   Optionally opens a single mimic (.umpnap) or an integrated plant project
+//   (.umpproj, all mimics merged) on launch and starts the simulation.
 int main(int argc, char** argv) {
   QApplication app(argc, argv);
   umpnap::MainWindow w;
@@ -19,7 +20,12 @@ int main(int argc, char** argv) {
     else if (!a.startsWith("-"))
       openFile = a;
   }
-  if (!openFile.isEmpty()) w.openPath(openFile);
+  if (!openFile.isEmpty()) {
+    if (openFile.endsWith(".umpproj"))
+      w.openPlantPath(openFile);
+    else
+      w.openPath(openFile);
+  }
   if (autoRun) w.startSimulation();
 
   return app.exec();

@@ -21,7 +21,11 @@ int main(int argc, char** argv) {
   const char* in = (argc > 1) ? argv[1] : "examples/loop.umpnap";
   const char* out = (argc > 2) ? argv[2] : "docs/umpnap_canvas.png";
   int steps = (argc > 3) ? atoi(argv[3]) : 0;  // run sim steps for runtime overlay
-  if (!loadProject(net, in)) {
+  std::string inStr(in);
+  bool isPlant = inStr.size() > 8 &&
+                 inStr.compare(inStr.size() - 8, 8, ".umpproj") == 0;
+  bool ok = isPlant ? loadPlantNetwork(net, inStr) : loadProject(net, inStr);
+  if (!ok) {
     qWarning("failed to load %s", in);
     return 1;
   }

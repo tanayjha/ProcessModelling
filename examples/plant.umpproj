@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "name": "Demo Air Plant",
+  "mimics": ["compressor_house.umpnap", "instrument_air.umpnap"]
+}

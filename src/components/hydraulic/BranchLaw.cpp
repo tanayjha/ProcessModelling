@@ -35,7 +35,8 @@ bool isBranch(const std::string& type) {
   return type == "Pipe" || type == "Valve" || type == "Orifice" ||
          type == "Pump" || type == "HeatExchanger" || type == "Duct" ||
          type == "Damper" || type == "Fan" || type == "Blower" ||
-         type == "Compressor" || type == "Filter" || type == "Strainer";
+         type == "Compressor" || type == "Filter" || type == "Strainer" ||
+         type == "ReliefValve" || type == "GasReliefValve";
 }
 
 bool isTankType(const std::string& type) {
@@ -183,6 +184,27 @@ double filterK(const Component& c) {
   return dPr / (Qr * Qr);
 }
 
+// ---- RELIEF / SAFETY VALVE ------------------------------------------------
+//  Self-acting pressure relief. Lift fraction ramps linearly from 0 to 1 as the
+//  differential dP rises from `setpoint` to `setpoint + blowdown`:
+//        phi = clamp( (dP - setpoint) / blowdown, 0, 1 )
+//  The installed coefficient is Kv_eff = Kv * phi, then the usual Kv->K form
+//  (as for a control valve) gives the quadratic resistance. Because phi
+//  depends on dP it is re-evaluated every Newton iteration. dP <= setpoint (or
+//  reverse flow) gives phi = 0 -> essentially closed (one-way action).
+//  Ref: API 520/526 relief-valve sizing; valve Kv sizing (IEC 60534-2-1).
+double reliefK(const Component& c, double dP, const FluidProps& f) {
+  double set = c.param("setpoint");
+  double band = c.param("blowdown");
+  if (band < 1.0) band = 1.0;
+  double Kv = c.param("Kv");
+  double phi = std::clamp((dP - set) / band, 0.0, 1.0);
+  double Kv_eff = Kv * phi;
+  if (Kv_eff < 1e-6) Kv_eff = 1e-6;  // shut -> very large resistance
+  double ratio = 3600.0 / Kv_eff;
+  return (1.0e5 * f.density / 1000.0) * ratio * ratio;
+}
+
 double hxK(const Component& c, double dP, const FluidProps& f) {
   double L = c.param("tubeLength");
   double di = c.param("tubeID");
@@ -291,6 +313,9 @@ BranchEval evalBranch(const Component& c, double dP, const FluidProps& f) {
     double dPeff = dP - f.density * kG * c.param("dZ");
     return resistanceFlow(dPeff, K);
   }
+  // Relief/safety valves open on the pressure differential across them.
+  if (c.type == "ReliefValve" || c.type == "GasReliefValve")
+    return resistanceFlow(dP, reliefK(c, dP, f));
   double K = 0.0;
   if (c.type == "Valve" || c.type == "Damper")
     K = valveK(c, f);

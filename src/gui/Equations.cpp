@@ -45,9 +45,19 @@ QString equationText(const std::string& type) {
   if (type == "Transmitter")
     return "Instrument (not solve-coupled in Phase 1):\n"
            "  reads measVar, scaled to [rangeMin, rangeMax].";
-  if (type == "Actuator")
-    return "Valve actuator (not solve-coupled in Phase 1):\n"
-           "  drives valve position; stroke time, fail position.";
+  if (type == "ReliefValve" || type == "GasReliefValve")
+    return "Pressure relief / safety valve (self-acting):\n"
+           "  φ = clamp((ΔP − setpoint)/blowdown, 0, 1)\n"
+           "  Kv_eff = Kv·φ,  ΔP = Kv→K · Q·|Q|\n"
+           "  shut below setpoint; one-way (no reverse flow).\n"
+           "Ref: API 520/526; IEC 60534-2-1.";
+  if (type == "Actuator" || type == "ElectricActuator" ||
+      type == "ManualActuator" || type == "PneumaticActuatorModulating" ||
+      type == "PneumaticActuatorOnOff")
+    return "Valve actuator (drive link; not solve-coupled in Phase 1):\n"
+           "  wire 'sig' → valve 'act' to record the driver.\n"
+           "  modulating: throttles; on/off: open/shut;\n"
+           "  fail position on loss of motive power.";
   if (type == "Controller")
     return "PID (not solve-coupled in Phase 1):\n"
            "  u = Kp·[e + (1/Ti)∫e dt + Td·de/dt].";

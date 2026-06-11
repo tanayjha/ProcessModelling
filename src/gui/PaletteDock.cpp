@@ -12,8 +12,10 @@ namespace umpnap {
 namespace {
 // Library group a component type belongs to.
 QString libraryOf(const ComponentDef& d) {
-  static const std::set<std::string> air = {"Duct",   "Damper", "Fan",
-                                             "Blower", "Compressor", "AirReceiver"};
+  static const std::set<std::string> air = {"Duct",      "Damper",
+                                             "Fan",       "Blower",
+                                             "Compressor", "AirReceiver",
+                                             "GasReliefValve"};
   static const std::set<std::string> steam = {"SteamGenerator", "Turbine",
                                               "Condenser", "Deaerator",
                                               "ASDV", "CSDV"};

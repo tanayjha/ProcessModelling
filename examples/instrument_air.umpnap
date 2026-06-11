@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "nextId": 5,
+  "components": [
+    {"id": 1, "type": "AirReceiver", "name": "AR-201", "domain": "Hydraulic", "x": 60, "y": 80, "fluid": "Air", "params": {"diameter": 1, "elevation": 0, "height": 2.5, "level": 0, "p_top": 103000}, "config": {"linkTag": "AR-PLANT-1"}},
+    {"id": 2, "type": "Valve", "name": "V-201", "domain": "Hydraulic", "x": 280, "y": 80, "fluid": "Air", "params": {"Kv": 50, "characteristic": 1, "elevation": 0, "position": 0.6, "rangeability": 50}},
+    {"id": 3, "type": "PneumaticActuatorModulating", "name": "PA-201", "domain": "Instrument", "x": 280, "y": 260, "fluid": "Light Water", "params": {"failPosition": 0, "modulating": 1, "strokeTime": 4, "supplyP": 400000}},
+    {"id": 4, "type": "Boundary", "name": "BND-4", "domain": "Hydraulic", "x": 500, "y": 80, "fluid": "Air", "params": {"elevation": 0, "pressure": 101300}}
+  ],
+  "connections": [
+    {"compA": 1, "portA": "n3", "compB": 2, "portB": "in"},
+    {"compA": 2, "portA": "out", "compB": 4, "portB": "p"},
+    {"compA": 3, "portA": "sig", "compB": 2, "portB": "act"}
+  ]
+}

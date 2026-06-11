@@ -76,13 +76,44 @@ setpoint by modulating its inlet valve.
 ### Expanded multi-domain library
 
 Beyond the core hydraulic set: **Filter, Strainer, Header, PressurizedTank,
-AirReceiver**, and pneumatic **Duct, Damper, Fan, Blower, Compressor** (which
-solve on the nodal engine with Air); plus **electrical** (Grid, Generator,
-Transformer, Busbar, Breaker, Cable, Motor, Load) and **instrument/control**
-(Transmitter, Switch, RTD, Gauge, Actuator, Controller, Timer, Logic) as
-configurable, tagged P&ID symbols. Each draws its standard glyph.
+AirReceiver, ReliefValve**, and pneumatic **Duct, Damper, Fan, Blower,
+Compressor, GasReliefValve** (which solve on the nodal engine with Air); plus
+**electrical** (Grid, Generator, Transformer, Busbar, Breaker, Cable, Motor,
+Load) and **instrument/control** (Transmitter, Switch, RTD, Gauge, Controller,
+Timer, Logic, and valve actuators — generic **Actuator** plus **Electric**
+(MOV), **Manual** (handwheel), and **Pneumatic** in both **modulating** and
+**on/off** variants) as configurable, tagged P&ID symbols. Each draws its
+standard glyph.
+
+- **Pressure relief / safety valves** (hydraulic `ReliefValve`, air/gas
+  `GasReliefValve`) are self-acting branches: shut until the differential
+  reaches the set pressure, then opening over a blowdown band up to their full
+  `Kv` (one-way, so also a check on reverse flow).
+- **Attachment (drive) links** — valves/dampers carry an `act` signal port and
+  pumps/fans/blowers/compressors an electrical `drive` port, so an **actuator
+  can be wired to a valve** and a **motor to a pump**. These links record the
+  driver on the P&ID; they do not create solver nodes (the nodal engine only
+  ever builds nodes from fluid-carrying ports).
+- **Air receiver with 20 tappings** (`p`, `n1…n19`) — a large plenum that ties
+  many compressors and consumers together; the solver collapses every tapping
+  onto one vessel pressure node. A **link tag** lets the *same* receiver be
+  referenced from several mimic files (see below).
 
 ![Symbol gallery](docs/umpnap_gallery.png)
+
+### Integrated multi-mimic plant projects
+
+A single `.umpnap` file is one **mimic** (one subsystem). A **plant project**
+(`.umpproj`) is a manifest that lists several mimics and runs them **as one
+integrated network** so you can watch whole-plant dynamics. Equipment that is
+physically shared between subsystems (a plant air receiver, a common header)
+is given a **link tag** in its properties; mimics that carry the *same* link tag
+are merged onto one instance, so a compressor drawn in one file and the
+instrument-air consumers drawn in others all tap the *same* receiver. `File ▸
+Open Plant Project…` (or `umpnap plant.umpproj`) merges every member mimic into
+a single `Network`, which the existing solver runs in unison. See
+[`docs/MULTI_MIMIC.md`](docs/MULTI_MIMIC.md); the bundled example is
+`examples/plant.umpproj` (build `make_plant`).
 
 ### Multi-domain modeling, media & validation
 
@@ -181,9 +212,10 @@ src/
     hydraulic/ BranchLaw (Darcy-Weisbach, orifice, valve, pump, HX laws)
   gui/         DiagramScene + items, Palette/Property/Hierarchy/Trend docks,
                MainWindow
-tests/         10 CTest unit tests (LU, fluids, network, registry, branch laws,
-               node graph, solver, validation, project round-trip)
-examples/      loop.umpnap + the generator that produced it
+tests/         12 CTest unit tests (LU, fluids, network, registry, branch laws,
+               node graph, solver, validation, project round-trip, plant merge)
+examples/      loop.umpnap + the generators that produced it, plus the
+               multi-mimic plant.umpproj (make_plant)
 ```
 
 ### Solver in one paragraph
