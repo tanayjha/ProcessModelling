@@ -19,21 +19,25 @@ QString libraryOf(const ComponentDef& d) {
   static const std::set<std::string> steam = {"SteamGenerator", "Turbine",
                                               "Condenser", "Deaerator",
                                               "ASDV", "CSDV"};
+  static const std::set<std::string> heat = {"HeatExchanger", "ShellSide",
+                                             "TubeSide"};
   if (d.domain == Domain::Electrical) return "Electrical";
   if (d.domain == Domain::Instrument || d.domain == Domain::Control)
     return "Instrumentation & Control";
   if (steam.count(d.type)) return "Steam";
   if (air.count(d.type)) return "Air / Gas";
+  if (heat.count(d.type)) return "Heat Transfer";
   return "Hydraulic";
 }
 
 // Display order of the groups.
 int groupOrder(const QString& g) {
   if (g == "Hydraulic") return 0;
-  if (g == "Air / Gas") return 1;
-  if (g == "Steam") return 2;
-  if (g == "Electrical") return 3;
-  return 4;  // Instrumentation & Control
+  if (g == "Heat Transfer") return 1;
+  if (g == "Air / Gas") return 2;
+  if (g == "Steam") return 3;
+  if (g == "Electrical") return 4;
+  return 5;  // Instrumentation & Control
 }
 }  // namespace
 
@@ -55,8 +59,8 @@ PaletteDock::PaletteDock(QWidget* parent) : QDockWidget("Component Palette", par
   };
 
   // Ensure groups appear in a stable, sensible order.
-  for (const char* g : {"Hydraulic", "Air / Gas", "Steam", "Electrical",
-                        "Instrumentation & Control"})
+  for (const char* g : {"Hydraulic", "Heat Transfer", "Air / Gas", "Steam",
+                        "Electrical", "Instrumentation & Control"})
     groupItem(g);
 
   for (const auto& def : ComponentRegistry::instance().defs()) {

@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "nextId": 4,
+  "components": [
+    {"id": 1, "type": "SteamGenerator", "name": "SG-1", "domain": "Hydraulic", "x": 80, "y": 80, "fluid": "Light Water", "params": {"level": 12, "pressure": 4.7e+06, "thermalPower": 600, "tubeArea": 3000}},
+    {"id": 2, "type": "Turbine", "name": "TUR-2", "domain": "Hydraulic", "x": 320, "y": 80, "fluid": "Light Water", "params": {"efficiency": 0.85, "exhaustP": 5000, "inletP": 4.5e+06, "ratedPower": 700}},
+    {"id": 3, "type": "Condenser", "name": "CND-3", "domain": "Hydraulic", "x": 560, "y": 80, "fluid": "Light Water", "params": {"area": 8000, "duty": 700, "pressure": 5000}}
+  ],
+  "connections": [
+    {"compA": 1, "portA": "steam", "compB": 2, "portB": "steam"},
+    {"compA": 2, "portA": "exhaust", "compB": 3, "portB": "steam"}
+  ]
+}

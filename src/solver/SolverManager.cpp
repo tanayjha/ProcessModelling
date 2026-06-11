@@ -7,12 +7,21 @@
 #include "core/Results.h"
 #include "solver/ControlSolver.h"
 #include "solver/NodeGraph.h"
+#include "solver/ThermalCoupling.h"
 
 namespace umpnap {
 
+void SolverManager::solveAuxDomains(Network& net, Results& out, double t) {
+  steam_.solveSteady(net, out, t);       // compressible steam pressure-flow
+  electrical_.solveSteady(net, out, t);  // linear DC power-flow
+  applyThermalCoupling(net, out, t);     // split shell/tube HX duty + temps
+}
+
 SolveReport SolverManager::runSteady(Network& net, Results& out) {
   out.clear();
-  return hydraulic_.solveSteady(net, out, 0.0);
+  SolveReport rep = hydraulic_.solveSteady(net, out, 0.0);
+  solveAuxDomains(net, out, 0.0);
+  return rep;
 }
 
 SolveReport SolverManager::stepTransient(Network& net, Results& out, double dt,
@@ -21,6 +30,7 @@ SolveReport SolverManager::stepTransient(Network& net, Results& out, double dt,
   // and reposition their valves before this cycle's hydraulic balance.
   applyControls(net, out, dt);
   SolveReport rep = hydraulic_.solveSteady(net, out, t);
+  solveAuxDomains(net, out, t);
 
   // Integrate tank levels from net inflow at each tank node (explicit Euler).
   NodeGraph g = buildNodeGraph(net);

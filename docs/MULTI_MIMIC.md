@@ -82,11 +82,35 @@ PlantProject              loadPlantNetwork()                 SolverManager
             (manifest)        (linkTag unify + rewire + band layout)   (unison)
 ```
 
+### Thermal tag (`config["thermalTag"]`)
+A second, **separate** coupling key used only by split shell-and-tube exchangers.
+A `ShellSide` and a `TubeSide` (typically in different mimics) that carry the
+same `thermalTag` form **one exchanger** and exchange heat in the integrated
+solve — but, unlike `linkTag`, they are **not** unified into a single instance
+(they are different physical streams). See `docs/EQUATIONS.md` and
+`examples/multidomain.umpproj`.
+
+## Tabbed multi-document workspace
+
+Opening a plant project no longer flattens everything onto one canvas. Instead:
+
+- **Each member mimic opens on its own editable tab**, so different engineers
+  develop different subsystems independently. The **Project** dock (left) is a
+  tree that nests every member beneath its plant.
+- An **`▣ Integrated` tab** holds the merged network and runs the whole plant in
+  unison. It is rebuilt from the *live* member nets whenever you switch to it (or
+  via `Simulation ▸ Rebuild Integrated Plant`), so edits made on a member tab
+  flow into the next integrated run.
+- Each tab owns its **own** `Network`, `Results`, trends and simulation clock, so
+  a subsystem can be solved and inspected in isolation before the integrated run.
+
+Standalone `.umpnap` files open as a single tab.
+
 ## Using it
 
-- **GUI:** `File ▸ Open Plant Project…`, pick the `.umpproj`. The merged plant
-  loads onto the canvas; press Run to see whole-plant dynamics. Set a component's
-  **Link tag** in the Properties dock to make it shareable.
+- **GUI:** `File ▸ Open Plant Project…`, pick the `.umpproj`. Member mimics open
+  on their own tabs plus the `▣ Integrated` tab; press Run on any tab. Set a
+  component's **Link tag** in the Properties dock to make it shareable.
 - **CLI:** `umpnap path/to/plant.umpproj [--run]`.
 - **Headless render:** `umpnap_screenshot plant.umpproj out.png`.
 - **Worked example:** `make_plant` writes `examples/compressor_house.umpnap`,
@@ -102,5 +126,6 @@ PlantProject              loadPlantNetwork()                 SolverManager
   controller `measComp`/`output`) resolves to the first matching tag after merge.
 - The air receiver is modelled as a **fixed-pressure plenum** (`p_top`); true
   compressible gas-inventory pressure dynamics await the dedicated gas solver.
-- Per-mimic tabs/views and a project tree in the GUI are a natural follow-on; the
-  engine merge and the manifest format are the foundation they would build on.
+- Per-mimic tabs and a project tree are now built (see *Tabbed multi-document
+  workspace* above). The integrated tab re-merges from the live member nets; it
+  is read for the unified run rather than edited directly.

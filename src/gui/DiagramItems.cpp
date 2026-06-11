@@ -139,6 +139,30 @@ void drawSymbol(QPainter* p, const std::string& type, const Component& c,
     p->setBrush(Qt::NoBrush);
     p->drawPath(path);
 
+  } else if (type == "TubeSide") {
+    // Tube bundle: shell outline with a U-tube hairpin (one stream of a split HX).
+    QRectF shell(g.left() + 2, cy - r * 0.9, g.width() - 4, r * 1.8);
+    p->drawRect(shell);
+    QPainterPath tubes;
+    double x0 = shell.left() + 6, x1 = shell.right() - 10;
+    tubes.moveTo(x0, cy - r * 0.4);
+    tubes.lineTo(x1, cy - r * 0.4);
+    tubes.arcTo(QRectF(x1 - r * 0.4, cy - r * 0.4, r * 0.8, r * 0.8), 90, -180);
+    tubes.lineTo(x0, cy + r * 0.4);
+    p->setBrush(Qt::NoBrush);
+    p->drawPath(tubes);
+
+  } else if (type == "ShellSide") {
+    // Shell stream: rounded shell with baffle ticks (the crossflow side).
+    QRectF shell(g.left() + 2, cy - r * 0.8, g.width() - 4, r * 1.6);
+    p->drawRoundedRect(shell, 6, 6);
+    for (int i = 1; i <= 3; ++i) {
+      double x = shell.left() + shell.width() * i / 4.0;
+      double top = (i % 2) ? shell.top() : shell.top() + r * 0.5;
+      double bot = (i % 2) ? shell.bottom() - r * 0.5 : shell.bottom();
+      p->drawLine(QPointF(x, top), QPointF(x, bot));
+    }
+
   } else if (type == "SteamGenerator") {
     // Tall vessel with a domed top and U-tube bundle hint.
     QRectF body(cx - r * 0.8, g.top() + 6, r * 1.6, g.height() - 8);

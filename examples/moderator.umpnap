@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "nextId": 4,
+  "components": [
+    {"id": 1, "type": "Boundary", "name": "BND-1", "domain": "Hydraulic", "x": 80, "y": 80, "fluid": "Heavy Water (D2O)", "params": {"elevation": 0, "pressure": 400000}},
+    {"id": 2, "type": "TubeSide", "name": "HXT-2", "domain": "Hydraulic", "x": 300, "y": 80, "fluid": "Heavy Water (D2O)", "params": {"Tin": 95, "U": 500, "elevation": 0, "minorK": 2, "numPasses": 2, "numTubes": 100, "roughness": 1.5e-06, "tubeID": 0.016, "tubeLength": 4, "tubeOD": 0.019}, "config": {"thermalTag": "HX1"}},
+    {"id": 3, "type": "Boundary", "name": "BND-3", "domain": "Hydraulic", "x": 520, "y": 80, "fluid": "Heavy Water (D2O)", "params": {"elevation": 0, "pressure": 100000}}
+  ],
+  "connections": [
+    {"compA": 1, "portA": "p", "compB": 2, "portB": "in"},
+    {"compA": 2, "portA": "out", "compB": 3, "portB": "p"}
+  ]
+}

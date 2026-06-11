@@ -89,6 +89,13 @@ void TrendDock::exportImage() {
   plot_->grab().save(path);
 }
 
+void TrendDock::setResults(Results* results) {
+  if (results_ == results) return;
+  results_ = results;
+  ranges_.clear();
+  refreshKeys();
+}
+
 void TrendDock::refreshKeys() {
   list_->clear();
   for (const auto& k : results_->keys())

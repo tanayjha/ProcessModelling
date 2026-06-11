@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "nextId": 7,
+  "components": [
+    {"id": 1, "type": "Grid", "name": "GRID-1", "domain": "Electrical", "x": 80, "y": 80, "fluid": "Light Water", "params": {"frequency": 50, "voltage": 11000}},
+    {"id": 2, "type": "Transformer", "name": "TX-2", "domain": "Electrical", "x": 260, "y": 80, "fluid": "Light Water", "params": {"impedance": 6, "rating": 1000, "ratio": 26.5}},
+    {"id": 3, "type": "Busbar", "name": "BUS-3", "domain": "Electrical", "x": 440, "y": 120, "fluid": "Light Water", "params": {"voltage": 415}},
+    {"id": 4, "type": "Cable", "name": "W-4", "domain": "Electrical", "x": 620, "y": 80, "fluid": "Light Water", "params": {"area": 95, "length": 50}},
+    {"id": 5, "type": "Motor", "name": "M-5", "domain": "Electrical", "x": 800, "y": 80, "fluid": "Light Water", "params": {"efficiency": 0.92, "rating": 75, "voltage": 415}},
+    {"id": 6, "type": "ElectricalLoad", "name": "LD-6", "domain": "Electrical", "x": 620, "y": 220, "fluid": "Light Water", "params": {"pf": 0.85, "power": 120}}
+  ],
+  "connections": [
+    {"compA": 1, "portA": "t", "compB": 2, "portB": "hv"},
+    {"compA": 2, "portA": "lv", "compB": 3, "portB": "a"},
+    {"compA": 3, "portA": "b", "compB": 4, "portB": "in"},
+    {"compA": 4, "portA": "out", "compB": 5, "portB": "t"},
+    {"compA": 3, "portA": "c", "compB": 6, "portB": "t"}
+  ]
+}

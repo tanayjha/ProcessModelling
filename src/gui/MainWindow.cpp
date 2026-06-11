@@ -4,6 +4,7 @@
 #include <QComboBox>
 #include <QDockWidget>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QGraphicsView>
 #include <QInputDialog>
 #include <QLabel>
@@ -12,6 +13,7 @@
 #include <QMessageBox>
 #include <QPainter>
 #include <QStatusBar>
+#include <QTabWidget>
 #include <QToolBar>
 #include <memory>
 
@@ -21,6 +23,7 @@
 #include "gui/HierarchyDock.h"
 #include "gui/PaletteDock.h"
 #include "gui/PlantData.h"
+#include "gui/ProjectDock.h"
 #include "gui/PropertyEditor.h"
 #include "gui/SimController.h"
 #include "gui/TrendDock.h"
@@ -33,56 +36,214 @@ MainWindow::MainWindow() {
   setWindowTitle("UMPNAP - Unified Multi-Domain Process Network Analysis Platform");
   resize(1280, 840);
 
-  scene_ = new DiagramScene(&net_, this);
-  view_ = new QGraphicsView(scene_, this);
-  view_->setRenderHint(QPainter::Antialiasing, true);
-  // Rubber-band selection over empty canvas; the scene intercepts presses on
-  // ports (wiring) and palette placement, so this only drags a selection box.
-  view_->setDragMode(QGraphicsView::RubberBandDrag);
-  setCentralWidget(view_);
+  tabs_ = new QTabWidget(this);
+  tabs_->setTabsClosable(true);
+  tabs_->setDocumentMode(true);
+  setCentralWidget(tabs_);
+  connect(tabs_, &QTabWidget::currentChanged, this, &MainWindow::onTabChanged);
+  connect(tabs_, &QTabWidget::tabCloseRequested, this,
+          &MainWindow::onTabCloseRequested);
 
   palette_ = new PaletteDock(this);
   properties_ = new PropertyEditor(this);
   hierarchy_ = new HierarchyDock(this);
-  trends_ = new TrendDock(&results_, this);
+  project_ = new ProjectDock(this);
 
   addDockWidget(Qt::LeftDockWidgetArea, palette_);
+  addDockWidget(Qt::LeftDockWidgetArea, project_);
   addDockWidget(Qt::LeftDockWidgetArea, hierarchy_);
   addDockWidget(Qt::RightDockWidgetArea, properties_);
+
+  // The first (pristine) document; trends_ binds to its results.
+  Document* first = addDocument(std::make_unique<Network>(), "Untitled", "");
+  trends_ = new TrendDock(first->results.get(), this);
   addDockWidget(Qt::BottomDockWidgetArea, trends_);
   resizeDocks({trends_}, {300}, Qt::Vertical);
 
-  sim_ = new SimController(&net_, &results_, this);
-  connect(sim_, &SimController::updated, this, &MainWindow::onSimUpdated);
-  connect(sim_, &SimController::modeChanged, this, &MainWindow::onSimModeChanged);
-
-  connect(palette_, &PaletteDock::typeSelected, scene_, &DiagramScene::setArmedType);
-  connect(scene_, &DiagramScene::componentSelected, this, [this](Component* c) {
-    selected_ = c;
-    properties_->showComponent(c);
+  // Palette placement and hierarchy navigation always target the active tab.
+  connect(palette_, &PaletteDock::typeSelected, this, [this](const QString& t) {
+    if (auto* d = activeDoc()) d->scene->setArmedType(t);
   });
-  connect(scene_, &DiagramScene::networkChanged, this,
-          [this]() { hierarchy_->refresh(&net_); });
-  connect(scene_, &DiagramScene::connectionRejected, this,
-          [this](const QString& r) { statusBar()->showMessage(r, 5000); });
+  connect(hierarchy_, &HierarchyDock::componentActivated, this, [this](int id) {
+    if (auto* d = activeDoc()) d->scene->selectComponent(id);
+  });
   connect(properties_, &PropertyEditor::edited, this, [this]() {
-    scene_->update();
-    hierarchy_->refresh(&net_);
+    if (auto* d = activeDoc()) {
+      d->scene->update();
+      hierarchy_->refresh(d->net.get());
+    }
   });
-  connect(hierarchy_, &HierarchyDock::componentActivated, scene_,
-          &DiagramScene::selectComponent);
+  connect(project_, &ProjectDock::documentActivated, this, [this](int idx) {
+    if (idx >= 0 && idx < tabs_->count()) tabs_->setCurrentIndex(idx);
+  });
 
   buildMenus();
   buildSimToolbar();
+  bindActiveDocument();
   statusBar()->showMessage(
-      "Ready. Click a palette item, then click the canvas to place it. "
-      "Drag port-to-port to connect. Use the Simulation toolbar to run.");
+      "Ready. Each mimic opens on its own tab; open a Plant Project to develop "
+      "subsystems independently and run them linked on the Integrated tab.");
 }
+
+// --------------------------- document management ---------------------------
+
+Document* MainWindow::addDocument(std::unique_ptr<Network> net,
+                                  const QString& title, const QString& path,
+                                  bool integrated) {
+  auto doc = std::make_unique<Document>();
+  doc->net = std::move(net);
+  doc->results = std::make_unique<Results>();
+  doc->title = title;
+  doc->path = path;
+  doc->integrated = integrated;
+  doc->view = new QGraphicsView(this);
+  doc->scene = new DiagramScene(doc->net.get(), doc->view);
+  doc->view->setScene(doc->scene);
+  doc->view->setRenderHint(QPainter::Antialiasing, true);
+  doc->view->setDragMode(QGraphicsView::RubberBandDrag);
+  doc->sim = new SimController(doc->net.get(), doc->results.get(), this);
+
+  Document* d = doc.get();
+  connect(d->scene, &DiagramScene::componentSelected, this, [this, d](Component* c) {
+    d->selected = c;
+    if (d == activeDoc()) properties_->showComponent(c);
+  });
+  connect(d->scene, &DiagramScene::networkChanged, this, [this, d]() {
+    if (d == activeDoc()) hierarchy_->refresh(d->net.get());
+  });
+  connect(d->scene, &DiagramScene::connectionRejected, this,
+          [this](const QString& r) { statusBar()->showMessage(r, 5000); });
+  connect(d->sim, &SimController::updated, this, [this, d]() { onSimUpdated(d); });
+  connect(d->sim, &SimController::modeChanged, this,
+          [this, d]() { onSimModeChanged(d); });
+
+  d->scene->rebuildFromNetwork();
+  d->sim->captureInitial();
+
+  docs_.push_back(std::move(doc));
+  QString label = (integrated ? QString("▣ ") : QString()) + title;
+  int idx = tabs_->addTab(d->view, label);
+  tabs_->setCurrentIndex(idx);
+  refreshProjectDock();
+  return d;
+}
+
+Document* MainWindow::activeDoc() {
+  int i = tabs_->currentIndex();
+  return (i >= 0 && i < (int)docs_.size()) ? docs_[i].get() : nullptr;
+}
+
+SimController* MainWindow::activeSim() {
+  Document* d = activeDoc();
+  return d ? d->sim : nullptr;
+}
+
+void MainWindow::bindActiveDocument() {
+  Document* d = activeDoc();
+  if (!d) return;
+  properties_->showComponent(d->selected);
+  hierarchy_->refresh(d->net.get());
+  if (trends_) trends_->setResults(d->results.get());
+  updateClock(d);
+  // Bring the diagram into view (loaded components sit at saved coordinates).
+  QRectF r = d->scene->itemsBoundingRect();
+  if (!r.isEmpty()) {
+    d->view->setSceneRect(r.adjusted(-300, -300, 300, 300));
+    d->view->centerOn(r.center());
+  }
+}
+
+void MainWindow::refreshProjectDock() {
+  QStringList titles;
+  QList<bool> integrated;
+  QList<int> parentOf;
+  for (size_t i = 0; i < docs_.size(); ++i) {
+    titles << docs_[i]->title;
+    integrated << docs_[i]->integrated;
+    parentOf << -1;
+  }
+  // Nest each integrated plant's members beneath it.
+  for (size_t i = 0; i < docs_.size(); ++i) {
+    if (!docs_[i]->integrated) continue;
+    for (Document* m : docs_[i]->members) {
+      for (size_t j = 0; j < docs_.size(); ++j)
+        if (docs_[j].get() == m) parentOf[(int)j] = (int)i;
+    }
+  }
+  project_->setDocuments(titles, integrated, parentOf, tabs_->currentIndex());
+}
+
+void MainWindow::rebuildIntegrated(Document* doc) {
+  if (!doc || !doc->integrated) return;
+  std::vector<const Network*> nets;
+  for (Document* m : doc->members) nets.push_back(m->net.get());
+  *doc->net = mergeMimics(nets);
+  doc->scene->rebuildFromNetwork();
+  doc->scene->clearRuntime();
+  doc->sim->captureInitial();
+}
+
+// ------------------------------- sim wiring --------------------------------
+
+void MainWindow::onSimUpdated(Document* d) {
+  d->scene->updateRuntime(*d->results);
+  if (d == activeDoc()) {
+    trends_->liveUpdate();
+    updateClock(d);
+  }
+}
+
+void MainWindow::onSimModeChanged(Document* d) {
+  onSimUpdated(d);
+  if (d != activeDoc()) return;
+  const char* m = d->sim->mode() == SimController::Running ? "Running"
+                  : d->sim->mode() == SimController::Paused
+                      ? "Paused (inspect/edit allowed)"
+                      : "Stopped";
+  statusBar()->showMessage(QString("Simulation: %1").arg(m));
+}
+
+void MainWindow::updateClock(Document* d) {
+  if (!clock_ || !d) return;
+  const char* m = d->sim->mode() == SimController::Running ? "Running"
+                  : d->sim->mode() == SimController::Paused ? "Paused"
+                                                            : "Stopped";
+  clock_->setText(
+      QString("  t = %1 s   [%2]  ").arg(d->sim->time(), 0, 'f', 1).arg(m));
+}
+
+void MainWindow::onTabChanged(int) {
+  Document* d = activeDoc();
+  if (d && d->integrated) rebuildIntegrated(d);  // reflect latest member edits
+  bindActiveDocument();
+  refreshProjectDock();
+}
+
+void MainWindow::onTabCloseRequested(int index) {
+  if (index < 0 || index >= (int)docs_.size()) return;
+  // Removing an integrated plant's member would orphan the merge; block it.
+  Document* victim = docs_[index].get();
+  for (const auto& dp : docs_)
+    if (dp->integrated)
+      for (Document* m : dp->members)
+        if (m == victim) {
+          statusBar()->showMessage(
+              "Close the Integrated tab before its member mimics.");
+          return;
+        }
+  tabs_->removeTab(index);
+  docs_.erase(docs_.begin() + index);
+  if (docs_.empty())
+    addDocument(std::make_unique<Network>(), "Untitled", "");
+  refreshProjectDock();
+}
+
+// --------------------------------- menus -----------------------------------
 
 void MainWindow::buildMenus() {
   QMenu* file = menuBar()->addMenu("&File");
-  file->addAction("&New", this, &MainWindow::newProject);
-  file->addAction("&Open...", this, &MainWindow::openProject);
+  file->addAction("&New Tab", this, &MainWindow::newProject);
+  file->addAction("&Open Mimic...", this, &MainWindow::openProject);
   file->addAction("Open &Plant Project...", this, [this]() {
     QString path = QFileDialog::getOpenFileName(
         this, "Open Plant Project", QString(), "UMPNAP Plant (*.umpproj)");
@@ -106,31 +267,48 @@ void MainWindow::buildMenus() {
 
   QMenu* sim = menuBar()->addMenu("&Simulation");
   sim->addAction("&Initialize (Steady)", this,
-                 [this]() { sim_->initializeSteady(); });
-  sim->addAction("&Run", this, [this]() { sim_->start(); });
-  sim->addAction("&Pause / Freeze", this, [this]() { sim_->pause(); });
-  sim->addAction("Single &Step", this, [this]() { sim_->singleStep(); });
-  sim->addAction("Rese&t", this, [this]() { sim_->reset(); });
+                 [this]() { if (auto* s = activeSim()) s->initializeSteady(); });
+  sim->addAction("&Run", this, [this]() { if (auto* s = activeSim()) s->start(); });
+  sim->addAction("&Pause / Freeze", this,
+                 [this]() { if (auto* s = activeSim()) s->pause(); });
+  sim->addAction("Single &Step", this,
+                 [this]() { if (auto* s = activeSim()) s->singleStep(); });
+  sim->addAction("Rese&t", this, [this]() { if (auto* s = activeSim()) s->reset(); });
   sim->addSeparator();
-  sim->addAction("Save Snapshot", this, [this]() { sim_->saveSnapshot(); });
-  sim->addAction("Restore Snapshot", this, [this]() { sim_->restoreSnapshot(); });
+  sim->addAction("Rebuild &Integrated Plant", this, [this]() {
+    Document* d = activeDoc();
+    if (d && d->integrated) {
+      rebuildIntegrated(d);
+      statusBar()->showMessage("Re-merged member mimics into the integrated run.");
+    } else {
+      statusBar()->showMessage("Switch to an Integrated plant tab first.");
+    }
+  });
+  sim->addSeparator();
+  sim->addAction("Save Snapshot", this,
+                 [this]() { if (auto* s = activeSim()) s->saveSnapshot(); });
+  sim->addAction("Restore Snapshot", this,
+                 [this]() { if (auto* s = activeSim()) s->restoreSnapshot(); });
   sim->addAction("Set &Timestep...", this, [this]() {
+    auto* s = activeSim();
+    if (!s) return;
     bool ok = false;
-    double dt = QInputDialog::getDouble(this, "Timestep", "dt (s):", sim_->dt(),
+    double dt = QInputDialog::getDouble(this, "Timestep", "dt (s):", s->dt(),
                                         1e-6, 1e6, 4, &ok);
-    if (ok) sim_->setDt(dt);
+    if (ok) s->setDt(dt);
   });
 
-  // View menu: show/hide and restore the docks.
   QMenu* view = menuBar()->addMenu("&View");
   for (QDockWidget* d : {static_cast<QDockWidget*>(palette_),
+                         static_cast<QDockWidget*>(project_),
                          static_cast<QDockWidget*>(hierarchy_),
                          static_cast<QDockWidget*>(properties_),
                          static_cast<QDockWidget*>(trends_)})
-    view->addAction(d->toggleViewAction());
+    if (d) view->addAction(d->toggleViewAction());
   view->addSeparator();
   view->addAction("Restore All Panels", this, [this]() {
     for (QDockWidget* d : {static_cast<QDockWidget*>(palette_),
+                           static_cast<QDockWidget*>(project_),
                            static_cast<QDockWidget*>(hierarchy_),
                            static_cast<QDockWidget*>(properties_),
                            static_cast<QDockWidget*>(trends_)}) {
@@ -138,6 +316,7 @@ void MainWindow::buildMenus() {
       d->setFloating(false);
     }
     addDockWidget(Qt::LeftDockWidgetArea, palette_);
+    addDockWidget(Qt::LeftDockWidgetArea, project_);
     addDockWidget(Qt::LeftDockWidgetArea, hierarchy_);
     addDockWidget(Qt::RightDockWidgetArea, properties_);
     addDockWidget(Qt::BottomDockWidgetArea, trends_);
@@ -153,22 +332,26 @@ void MainWindow::buildSimToolbar() {
   QToolBar* tb = addToolBar("Simulation");
   tb->addAction("Plant Data", this, &MainWindow::openPlantData);
   tb->addSeparator();
-  tb->addAction("⏮ Init", this, [this]() { sim_->initializeSteady(); });
-  tb->addAction("▶ Run", this, [this]() { sim_->start(); });
-  tb->addAction("⏸ Pause", this, [this]() { sim_->pause(); });
-  tb->addAction("⏭ Step", this, [this]() { sim_->singleStep(); });
-  tb->addAction("⟲ Reset", this, [this]() { sim_->reset(); });
+  tb->addAction("⏮ Init", this,
+                [this]() { if (auto* s = activeSim()) s->initializeSteady(); });
+  tb->addAction("▶ Run", this, [this]() { if (auto* s = activeSim()) s->start(); });
+  tb->addAction("⏸ Pause", this, [this]() { if (auto* s = activeSim()) s->pause(); });
+  tb->addAction("⏭ Step", this,
+                [this]() { if (auto* s = activeSim()) s->singleStep(); });
+  tb->addAction("⟲ Reset", this, [this]() { if (auto* s = activeSim()) s->reset(); });
   tb->addSeparator();
   tb->addWidget(new QLabel(" Speed ", tb));
   auto* speed = new QComboBox(tb);
   speed->addItems({"1x", "2x", "5x", "10x", "20x"});
   connect(speed, &QComboBox::currentTextChanged, this, [this](const QString& s) {
-    sim_->setSpeed(s.left(s.size() - 1).toInt());
+    if (auto* sc = activeSim()) sc->setSpeed(s.left(s.size() - 1).toInt());
   });
   tb->addWidget(speed);
   tb->addSeparator();
-  tb->addAction("Snapshot", this, [this]() { sim_->saveSnapshot(); });
-  tb->addAction("Restore", this, [this]() { sim_->restoreSnapshot(); });
+  tb->addAction("Snapshot", this,
+                [this]() { if (auto* s = activeSim()) s->saveSnapshot(); });
+  tb->addAction("Restore", this,
+                [this]() { if (auto* s = activeSim()) s->restoreSnapshot(); });
   tb->addAction("Validate", this, &MainWindow::runValidation);
   tb->addSeparator();
   tb->addWidget(new QLabel(" Find tag ", tb));
@@ -177,19 +360,21 @@ void MainWindow::buildSimToolbar() {
   search->setMaximumWidth(120);
   search->setClearButtonEnabled(true);
   connect(search, &QLineEdit::returnPressed, this, [this, search]() {
+    Document* d = activeDoc();
+    if (!d) return;
     QString q = search->text().trimmed();
     if (q.isEmpty()) return;
-    Component* c = net_.componentByName(q.toStdString());
-    if (!c) {  // fall back to a case-insensitive partial tag match
-      for (const auto& comp : net_.components())
+    Component* c = d->net->componentByName(q.toStdString());
+    if (!c) {
+      for (const auto& comp : d->net->components())
         if (QString::fromStdString(comp->name).contains(q, Qt::CaseInsensitive)) {
           c = comp.get();
           break;
         }
     }
     if (c) {
-      scene_->selectComponent(c->id);  // -> selects + shows in Properties
-      view_->centerOn(c->x, c->y);
+      d->scene->selectComponent(c->id);
+      d->view->centerOn(c->x, c->y);
       statusBar()->showMessage("Found " + QString::fromStdString(c->name));
     } else {
       statusBar()->showMessage("No component matching '" + q + "'");
@@ -201,148 +386,176 @@ void MainWindow::buildSimToolbar() {
   tb->addWidget(clock_);
 }
 
-void MainWindow::onSimUpdated() {
-  scene_->updateRuntime(results_);
-  trends_->liveUpdate();
-  if (clock_) {
-    const char* m = sim_->mode() == SimController::Running ? "Running"
-                    : sim_->mode() == SimController::Paused ? "Paused"
-                                                            : "Stopped";
-    clock_->setText(QString("  t = %1 s   [%2]  ")
-                        .arg(sim_->time(), 0, 'f', 1)
-                        .arg(m));
-  }
-}
-
-void MainWindow::onSimModeChanged() {
-  onSimUpdated();
-  const char* m = sim_->mode() == SimController::Running ? "Running"
-                  : sim_->mode() == SimController::Paused ? "Paused (inspect/edit allowed)"
-                                                          : "Stopped";
-  statusBar()->showMessage(QString("Simulation: %1").arg(m));
-}
+// ------------------------------ file actions -------------------------------
 
 void MainWindow::cloneSelected() {
-  if (!selected_) {
+  Document* d = activeDoc();
+  if (!d || !d->selected) {
     statusBar()->showMessage("Select a component to clone.");
     return;
   }
-  auto c = ComponentRegistry::instance().create(selected_->type);
+  auto c = ComponentRegistry::instance().create(d->selected->type);
   if (!c) return;
-  c->fluid = selected_->fluid;
-  c->params = selected_->params;
-  c->curves = selected_->curves;
-  c->x = selected_->x + 40;
-  c->y = selected_->y + 40;
-  net_.addComponent(std::move(c));  // gets a fresh id + tag
-  scene_->rebuildFromNetwork();
-  hierarchy_->refresh(&net_);
-  statusBar()->showMessage("Cloned " + QString::fromStdString(selected_->name));
+  c->fluid = d->selected->fluid;
+  c->params = d->selected->params;
+  c->curves = d->selected->curves;
+  c->config = d->selected->config;
+  c->x = d->selected->x + 40;
+  c->y = d->selected->y + 40;
+  QString name = QString::fromStdString(d->selected->name);
+  d->net->addComponent(std::move(c));
+  d->scene->rebuildFromNetwork();
+  hierarchy_->refresh(d->net.get());
+  statusBar()->showMessage("Cloned " + name);
 }
 
 void MainWindow::saveInitialCondition() {
+  Document* d = activeDoc();
+  if (!d) return;
   QString path = QFileDialog::getSaveFileName(this, "Save Initial Condition",
                                               QString(), "Initial Condition (*.ic)");
   if (path.isEmpty()) return;
   if (!path.endsWith(".ic")) path += ".ic";
-  if (saveProject(net_, path.toStdString()))
+  if (saveProject(*d->net, path.toStdString()))
     statusBar()->showMessage("Saved initial condition " + path);
 }
 
 void MainWindow::loadInitialCondition() {
+  Document* d = activeDoc();
+  if (!d) return;
   QString path = QFileDialog::getOpenFileName(this, "Load Initial Condition",
                                               QString(), "Initial Condition (*.ic)");
   if (path.isEmpty()) return;
-  if (!loadProject(net_, path.toStdString())) {
+  if (!loadProject(*d->net, path.toStdString())) {
     QMessageBox::warning(this, "Load IC", "Failed to load initial condition.");
     return;
   }
-  scene_->rebuildFromNetwork();
-  hierarchy_->refresh(&net_);
-  sim_->captureInitial();
-  sim_->initializeSteady();
+  d->scene->rebuildFromNetwork();
+  hierarchy_->refresh(d->net.get());
+  d->sim->captureInitial();
+  d->sim->initializeSteady();
   statusBar()->showMessage("Loaded initial condition " + path);
 }
 
 void MainWindow::openPlantData() {
-  PlantDataDialog dlg(&net_, this);
-  connect(&dlg, &PlantDataDialog::dataChanged, this, [this]() {
-    scene_->update();
-    hierarchy_->refresh(&net_);
-    if (selected_) properties_->showComponent(selected_);  // keep panel in sync
+  Document* d = activeDoc();
+  if (!d) return;
+  PlantDataDialog dlg(d->net.get(), this);
+  connect(&dlg, &PlantDataDialog::dataChanged, this, [this, d]() {
+    d->scene->update();
+    hierarchy_->refresh(d->net.get());
+    if (d->selected) properties_->showComponent(d->selected);
   });
   dlg.exec();
-  scene_->update();
-  hierarchy_->refresh(&net_);
-  if (selected_) properties_->showComponent(selected_);
+  d->scene->update();
+  hierarchy_->refresh(d->net.get());
+  if (d->selected) properties_->showComponent(d->selected);
 }
 
 void MainWindow::newProject() {
-  net_.clear();
-  results_.clear();
-  scene_->rebuildFromNetwork();
-  hierarchy_->refresh(&net_);
-  trends_->refreshKeys();
-  properties_->showComponent(nullptr);
-  statusBar()->showMessage("New project.");
+  addDocument(std::make_unique<Network>(), "Untitled", "");
+  statusBar()->showMessage("New tab.");
 }
 
 void MainWindow::openProject() {
-  QString path = QFileDialog::getOpenFileName(this, "Open Project", QString(),
+  QString path = QFileDialog::getOpenFileName(this, "Open Mimic", QString(),
                                               "UMPNAP Projects (*.umpnap)");
   if (path.isEmpty()) return;
   openPath(path);
 }
 
 void MainWindow::openPath(const QString& path) {
-  if (!loadProject(net_, path.toStdString())) {
+  auto net = std::make_unique<Network>();
+  if (!loadProject(*net, path.toStdString())) {
     QMessageBox::warning(this, "Open", "Failed to load project: " + path);
     return;
   }
-  scene_->rebuildFromNetwork();
-  scene_->clearRuntime();
-  hierarchy_->refresh(&net_);
-  properties_->showComponent(nullptr);
-  sim_->captureInitial();
+  QString title = QFileInfo(path).completeBaseName();
+  // Reuse the initial pristine tab if it is still empty and unsaved.
+  Document* d = activeDoc();
+  if (docs_.size() == 1 && d && d->path.isEmpty() && d->net->components().empty()) {
+    *d->net = std::move(*net);
+    d->title = title;
+    d->path = path;
+    d->scene->rebuildFromNetwork();
+    d->scene->clearRuntime();
+    d->sim->captureInitial();
+    tabs_->setTabText(0, title);
+    bindActiveDocument();
+    refreshProjectDock();
+  } else {
+    addDocument(std::move(net), title, path);
+  }
   statusBar()->showMessage("Opened " + path);
 }
 
 void MainWindow::openPlantPath(const QString& path) {
-  if (!loadPlantNetwork(net_, path.toStdString())) {
+  PlantProject proj;
+  if (!loadPlant(proj, path.toStdString())) {
     QMessageBox::warning(this, "Open Plant",
                          "Failed to load plant project: " + path);
     return;
   }
-  scene_->rebuildFromNetwork();
-  scene_->clearRuntime();
-  hierarchy_->refresh(&net_);
-  properties_->showComponent(nullptr);
-  sim_->captureInitial();
+  QString dir = QFileInfo(path).absolutePath() + "/";
+  std::vector<Document*> members;
+  for (const std::string& rel : proj.mimics) {
+    QString full = QString::fromStdString(rel);
+    if (!full.startsWith("/")) full = dir + full;
+    auto net = std::make_unique<Network>();
+    if (!loadProject(*net, full.toStdString())) continue;
+    Document* m = addDocument(std::move(net), QFileInfo(full).completeBaseName(),
+                              full);
+    members.push_back(m);
+  }
+  // Build the integrated (merged) run tab from the live member networks.
+  std::vector<const Network*> nets;
+  for (Document* m : members) nets.push_back(m->net.get());
+  QString plantTitle =
+      proj.name.empty() ? QFileInfo(path).completeBaseName()
+                        : QString::fromStdString(proj.name);
+  Document* integ = addDocument(std::make_unique<Network>(mergeMimics(nets)),
+                                plantTitle, path, /*integrated=*/true);
+  integ->members = members;
+  rebuildIntegrated(integ);  // re-merge now that members are wired
+  bindActiveDocument();      // integrated tab is already current; bind its docks
+  refreshProjectDock();
   statusBar()->showMessage(
-      "Opened integrated plant " + path +
-      " — all mimics merged; run to see whole-plant dynamics.");
+      "Opened plant '" + plantTitle +
+      "': edit each mimic on its tab; the Integrated tab runs them linked.");
 }
 
-void MainWindow::startSimulation() { sim_->start(); }
+void MainWindow::startSimulation() {
+  if (auto* s = activeSim()) s->start();
+}
 
 void MainWindow::saveProject_() {
-  QString path = QFileDialog::getSaveFileName(this, "Save Project", QString(),
-                                              "UMPNAP Projects (*.umpnap)");
+  Document* d = activeDoc();
+  if (!d) return;
+  QString path = d->path;
+  if (path.isEmpty() || d->integrated)
+    path = QFileDialog::getSaveFileName(this, "Save Mimic", d->path,
+                                        "UMPNAP Projects (*.umpnap)");
   if (path.isEmpty()) return;
   if (!path.endsWith(".umpnap")) path += ".umpnap";
-  if (!saveProject(net_, path.toStdString())) {
+  if (!saveProject(*d->net, path.toStdString())) {
     QMessageBox::warning(this, "Save", "Failed to save project.");
     return;
   }
+  d->path = path;
+  d->title = QFileInfo(path).completeBaseName();
+  if (!d->integrated) tabs_->setTabText(tabs_->currentIndex(), d->title);
+  refreshProjectDock();
   statusBar()->showMessage("Saved " + path);
 }
 
 void MainWindow::exportCsv() {
+  Document* d = activeDoc();
+  if (!d) return;
   QString path = QFileDialog::getSaveFileName(this, "Export Results", QString(),
                                               "CSV (*.csv)");
   if (path.isEmpty()) return;
   if (!path.endsWith(".csv")) path += ".csv";
-  if (!results_.writeCsv(path.toStdString())) {
+  if (!d->results->writeCsv(path.toStdString())) {
     QMessageBox::warning(this, "Export", "Failed to write CSV.");
     return;
   }
@@ -365,11 +578,11 @@ void MainWindow::about() {
   QMessageBox::about(
       this, "About UMPNAP",
       "Unified Multi-Domain Process Network Analysis Platform\n\n"
-      "Phase 1: single-phase hydraulic network solver (Newton-Raphson, "
-      "nodal pressure formulation).\n\n"
-      "Generic fluid property package, plugin component library, and an "
-      "analytically-validated solver. Gas/thermal/electrical domains are "
-      "registered as solver stubs for later phases.");
+      "Validated single-phase hydraulic + pneumatic nodal solver, a compressible "
+      "steam pressure-flow solver, a linear DC electrical power-flow solver, and "
+      "split shell-and-tube thermal coupling. Multi-mimic plant projects develop "
+      "subsystems on independent tabs and simulate them linked on an integrated "
+      "tab.");
 }
 
 }  // namespace umpnap

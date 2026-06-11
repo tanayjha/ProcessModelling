@@ -1,11 +1,16 @@
 #pragma once
+#include "solver/ElectricalSolver.h"
 #include "solver/HydraulicSolver.h"
 #include "solver/ISolver.h"
+#include "solver/SteamSolver.h"
 
 namespace umpnap {
 
-// Coordinates the domain solvers. Phase 1 dispatches to the hydraulic solver and
-// owns the transient timestep loop (integrates tank levels between steady solves).
+// Coordinates the domain solvers. Each cycle runs, in order, the hydraulic
+// nodal solve, the steam pressure-flow solve, the electrical DC power-flow
+// solve, then the shell-and-tube thermal-coupling pass — all recording into the
+// same Results. Owns the transient timestep loop (integrates tank levels
+// between steady re-solves).
 class SolverManager {
  public:
   // Steady-state solve at t=0. Clears prior results.
@@ -23,7 +28,12 @@ class SolverManager {
   HydraulicSolver& hydraulic() { return hydraulic_; }
 
  private:
+  // Runs the steam, electrical and thermal-coupling passes at time t.
+  void solveAuxDomains(Network& net, Results& out, double t);
+
   HydraulicSolver hydraulic_;
+  SteamSolver steam_;
+  ElectricalSolver electrical_;
 };
 
 }  // namespace umpnap

@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "name": "Multi-Domain Demo",
+  "mimics": ["steam_island.umpnap", "power.umpnap", "moderator.umpnap", "service_water.umpnap"]
+}

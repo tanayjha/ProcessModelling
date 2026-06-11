@@ -18,6 +18,8 @@ class TrendDock : public QDockWidget {
   Q_OBJECT
  public:
   explicit TrendDock(Results* results, QWidget* parent = nullptr);
+  // Retarget at a different document's Results (multi-document tabs).
+  void setResults(Results* results);
   void refreshKeys();   // repopulate the signal list from results
   void liveUpdate();    // during a run: populate once, then just replot
 

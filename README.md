@@ -77,9 +77,11 @@ setpoint by modulating its inlet valve.
 
 Beyond the core hydraulic set: **Filter, Strainer, Header, PressurizedTank,
 AirReceiver, ReliefValve**, and pneumatic **Duct, Damper, Fan, Blower,
-Compressor, GasReliefValve** (which solve on the nodal engine with Air); plus
-**electrical** (Grid, Generator, Transformer, Busbar, Breaker, Cable, Motor,
-Load) and **instrument/control** (Transmitter, Switch, RTD, Gauge, Controller,
+Compressor, GasReliefValve** (which solve on the nodal engine with Air); a
+**Heat Transfer** group (**HeatExchanger**, plus split **ShellSide**/**TubeSide**);
+plus **electrical** (Grid, Generator, Transformer, Busbar, Breaker, Cable, Motor,
+Load — now solved by a DC power-flow) and **instrument/control** (Transmitter,
+Switch, RTD, Gauge, Controller,
 Timer, Logic, and valve actuators — generic **Actuator** plus **Electric**
 (MOV), **Manual** (handwheel), and **Pneumatic** in both **modulating** and
 **on/off** variants) as configurable, tagged P&ID symbols. Each draws its
@@ -115,6 +117,42 @@ a single `Network`, which the existing solver runs in unison. See
 [`docs/MULTI_MIMIC.md`](docs/MULTI_MIMIC.md); the bundled example is
 `examples/plant.umpproj` (build `make_plant`).
 
+**Tabbed multi-document workspace.** Opening a plant project now gives each
+member mimic **its own editable canvas tab** — so different people develop
+different subsystems independently — plus an **`▣ Integrated` tab** that merges
+them and simulates the whole plant in unison (rebuilt from the live member nets,
+or via `Simulation ▸ Rebuild Integrated Plant`). A **Project** explorer dock
+nests each plant's members beneath it. Standalone `.umpnap` files open as single
+tabs; each tab carries its own network, results, trends and simulation clock.
+
+![Tabbed multi-document workspace](docs/umpnap_tabs.png)
+
+### Steam, electrical & split heat-exchanger solving
+
+Three pragmatic domain solvers now produce real engineering numbers and feed the
+trends, all coordinated by `SolverManager` (hydraulic → steam → electrical →
+thermal each cycle):
+
+- **Steam** — a compressible, isothermal **pressure-flow** solve over the
+  steam-medium subnetwork (Steam Generator source, Condenser/Deaerator sinks,
+  Turbine and ASDV/CSDV branches), mass-conserving Newton-Raphson with a
+  Stodola-style swallowing law; records node pressures, steam mass flow and
+  turbine power.
+- **Electrical** — a **linear DC power-flow** by modified nodal analysis
+  (`V = I·R`): Grid/Generator voltage sources, Cable resistances, ideal
+  Transformer turns-ratio, closed/open Breakers, and Motor/Load conductances;
+  records node voltages, branch currents and power.
+- **Split shell-and-tube HX** — `ShellSide` and `TubeSide` are independent flow
+  elements (each on its own mimic) that exchange heat when they share a
+  `thermalTag`. The duty is computed by the **effectiveness-NTU** method from the
+  per-stream mass flows and outlet temperatures recorded — so the shell can sit
+  in a process-cooling loop and the tube in a moderator loop and still couple
+  thermally in the integrated solve.
+
+The bundled `examples/multidomain.umpproj` (build `make_multidomain`) wires all
+three into one plant: a steam island, an electrical distribution, and a
+moderator/service-water pair coupled across mimics by one split HX.
+
 ### Multi-domain modeling, media & validation
 
 - **Library-grouped palette** — components are organised under Hydraulic /
@@ -139,19 +177,23 @@ a single `Network`, which the existing solver runs in unison. See
 > **Scope / roadmap.** This is a working core of the full digital-plant vision,
 > not the whole thing. Delivered: the simulation engine, runtime monitoring,
 > snapshots/initial conditions, a validated hydraulic+pneumatic nodal solver,
-> basic PID control, and a broad component library. **Not yet implemented:** a
-> true electrical power-flow solver (electrical components are symbols/datasheets
-> only), compressible-steam/two-phase thermodynamics, discrete logic/state-machine
-> execution, and every component variant in the original spec. The architecture
-> (common base, plugin registry, `ISolver` per domain) is built to extend into
-> these without rework.
+> a compressible-steam pressure-flow solver, a linear DC electrical power-flow
+> solver, split shell-and-tube thermal coupling, a tabbed multi-document plant
+> workspace, basic PID control, and a broad component library. **Not yet
+> implemented:** full two-phase/steam-table thermodynamics and turbine Stodola
+> modelling, AC power-flow with transformer leakage impedance, discrete
+> logic/state-machine execution, and every component variant in the original
+> spec. The architecture (common base, plugin registry, `ISolver` per domain) is
+> built to extend into these without rework.
 
 ## What is stubbed (later phases)
 
-Gas, thermal, and electrical solvers are **registered behind the same `ISolver`
-interface but do not solve yet** — they report "not implemented". Coupled
-gas–liquid (cover-gas) and two-phase/steam are not attempted. One correct,
-validated hydraulic solver was prioritised over five unverified ones.
+Steam and electrical now solve pragmatically (isothermal compressible
+pressure-flow; linear DC `V=I·R`). Still simplified: two-phase quality / steam
+tables, AC magnitudes & phase, transformer leakage impedance, and true
+compressible gas-inventory receiver dynamics. The `gas`/`thermal` `ISolver`
+stubs remain as placeholders. One correct, validated hydraulic solver was
+prioritised first, and the newer solvers build on the same nodal machinery.
 
 ## Dependencies
 
@@ -207,15 +249,18 @@ src/
   core/        Component, Network, ComponentRegistry, FluidLibrary,
                Results, Project (JSON)
   solver/      LinAlg (dense LU), NodeGraph, ISolver, HydraulicSolver,
-               SolverManager, StubSolvers, Validation
+               SteamSolver, ElectricalSolver, ThermalCoupling, SolverManager,
+               StubSolvers, Validation
   components/
-    hydraulic/ BranchLaw (Darcy-Weisbach, orifice, valve, pump, HX laws)
-  gui/         DiagramScene + items, Palette/Property/Hierarchy/Trend docks,
-               MainWindow
-tests/         12 CTest unit tests (LU, fluids, network, registry, branch laws,
-               node graph, solver, validation, project round-trip, plant merge)
-examples/      loop.umpnap + the generators that produced it, plus the
-               multi-mimic plant.umpproj (make_plant)
+    hydraulic/ BranchLaw (Darcy-Weisbach, orifice, valve, pump, HX/shell/tube)
+  gui/         DiagramScene + items, Palette/Project/Property/Hierarchy/Trend
+               docks, tabbed MainWindow
+tests/         13 CTest unit tests (LU, fluids, network, registry, branch laws,
+               node graph, solver, validation, project round-trip, plant merge,
+               steam/electrical/HX-coupling)
+examples/      loop.umpnap + the generators that produced it, the multi-mimic
+               plant.umpproj (make_plant) and multidomain.umpproj
+               (make_multidomain: steam + electrical + split HX)
 ```
 
 ### Solver in one paragraph
@@ -226,7 +271,11 @@ flow `Q(ΔP)` and its derivative: pipes use Darcy-Weisbach with a laminar/Swamee
 friction factor, orifices/valves/heat-exchangers use a quadratic resistance, pumps
 use a `H = H0 − a·Q²` head curve. Mass conservation at each free node forms
 `F(P)=0`, solved by Newton-Raphson (`J·ΔP = −F` via dense LU) with a backtracking
-line search. Transient runs integrate tank levels and re-solve each step.
+line search. Transient runs integrate tank levels and re-solve each step. The
+steam solver reuses the same Newton machinery on the steam-medium subnetwork
+(mass-conserving, compressible `ṁ ∝ √(P₁²−P₂²)`); the electrical solver is one
+linear MNA solve (`V=I·R`); the split-HX thermal pass runs after the hydraulic
+solve using the per-stream flows — all into one `Results`.
 
 ## How to add a component
 

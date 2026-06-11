@@ -120,11 +120,34 @@ Tube-side pressure drop (flow splits equally among `N` tubes,
 ```
 ΔP = ( f·L_eff/ID + ΣK )·ρ v_t²/2     ⇒   K = ( f·L_eff/ID + ΣK )·ρ / (2 (N·A_t)²)
 ```
-Thermal duty (documented; solved in a later phase):
+Single-component duty (documented):
 ```
 Q̇ = U · A_s · ΔT_lm ,   A_s = N·π·OD·L     (LMTD method)
 ```
 **Ref:** Kern, *Process Heat Transfer* (tube-side ΔP); LMTD method.
+
+## Split shell-and-tube exchanger — `ShellSide` + `TubeSide`
+
+The split exchanger models the two streams as **separate flow elements** (one per
+mimic) that couple thermally when they share a non-empty `config["thermalTag"]`
+(distinct from `linkTag`, which merges identity). Each side is a hydraulic
+branch:
+```
+TubeSide:   same tube-bundle ΔP as the Heat Exchanger above
+ShellSide:  crossflow ΔP, A_c = D_s·B·(1 − d_o/pt),  pt = pitchRatio·d_o
+            ΔP = (crossLossK + ΣK)·ρ v²/2,  v = Q/A_c   ⇒  K = (…)·ρ/(2 A_c²)
+```
+After the hydraulic solve, the duty is found by the **effectiveness-NTU** method
+from the per-stream capacity rates `C = ρ|Q|·c_p` (Cmin, Cmax, Cr = Cmin/Cmax):
+```
+UA = U·N·π·d_o·L ,   NTU = UA / Cmin
+ε  = (1 − e^{−NTU(1−Cr)}) / (1 − Cr·e^{−NTU(1−Cr)})   (Cr=1: ε = NTU/(1+NTU))
+Q̇  = ε · Cmin · (T_hot,in − T_cold,in)
+T_hot,out  = T_hot,in  − Q̇/C_hot ,   T_cold,out = T_cold,in + Q̇/C_cold
+```
+Inlet temperatures are the `Tin` parameter of each side. Records duty and
+inlet/outlet temps for both sides. **Ref:** Kern; effectiveness-NTU method.
+See `src/solver/ThermalCoupling.cpp`.
 
 ## Tank — vessel node + inventory
 
@@ -181,8 +204,42 @@ with the same node + inventory model as Tank, the top pressure being the
 blanket-gas pressure. The **AirReceiver** is a large plenum exposing 20 tappings
 (`p`, `n1…n19`); the node graph unions them all onto **one vessel pressure node**
 (pinned at `p_top`), so it behaves as a shared header for many compressors and
-consumers. Electrical components are configurable library symbols pending a
-power-flow solver.
+consumers.
+
+## Steam network — compressible pressure-flow
+
+The steam-medium subnetwork is solved on the same nodal Newton machinery, but
+**conserving mass** with a compressible isothermal branch law (steam treated as
+an ideal vapour at a reference temperature). For a branch between node pressures
+`P₁, P₂` with swallowing coefficient `C`:
+```
+ṁ = C · sign(s) · √|s| ,   s = P₁² − P₂²        [kg/s]
+```
+Steam Generators pin their `steam` port at `pressure` (source); Condensers and
+Deaerators pin theirs (sink). A **Turbine** is a branch whose `C` is set from
+rated power and a nominal enthalpy drop (`ṁ_rated = ratedPower/Δh`), with power
+`= ṁ·Δh·η`; **ASDV/CSDV** dump valves scale `C` by their open fraction. Mass
+balance at each free node gives `F(P)=0`, solved by Newton-Raphson with dense LU.
+Records `steamnode.*.pressure`, branch mass flow and turbine power. **Ref:**
+Stodola swallowing; isothermal compressible flow. See `src/solver/SteamSolver.cpp`.
+
+## Electrical network — linear DC power-flow (MNA)
+
+The electrical-medium subnetwork is solved by **modified nodal analysis** of a
+resistive `V = I·R` network:
+```
+Grid / Generator   ideal voltage source, terminal-to-ground at `voltage`
+Cable              series resistance  R = ρ_cu · L / A
+Breaker            closed = ideal link (merged node); open = removed
+Busbar             ideal node (all terminals merged)
+Transformer        ideal turns-ratio constraint  V_hv = ratio · V_lv
+Motor / Load       conductance to ground  G = P / V_rated²
+```
+Assembling `[G B; C 0]·[V; i] = [I_inj; V_s]` and one dense LU solve yields node
+voltages and the source/transformer branch currents; cable and load currents and
+powers follow. Records `elecnode.*.voltage` and per-component current/power. AC
+magnitude/phase and transformer leakage impedance are out of scope.
+**Ref:** modified nodal analysis. See `src/solver/ElectricalSolver.cpp`.
 
 ## Multi-mimic plant merge
 

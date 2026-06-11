@@ -1,13 +1,15 @@
 #pragma once
 #include <QMainWindow>
+#include <QString>
+#include <memory>
+#include <vector>
 
 #include "core/Network.h"
 #include "core/Results.h"
-#include "solver/SolverManager.h"
 
 class QGraphicsView;
+class QTabWidget;
 class QLabel;
-class QComboBox;
 
 namespace umpnap {
 
@@ -16,20 +18,37 @@ class PaletteDock;
 class PropertyEditor;
 class HierarchyDock;
 class TrendDock;
+class ProjectDock;
 class SimController;
 class Component;
+
+// One editable mimic, or the merged integrated-plant run, shown on its own tab.
+// Each document owns its network, results, scene/view and simulation engine, so
+// different subsystems are developed independently and linked into one run.
+struct Document {
+  std::unique_ptr<Network> net;
+  std::unique_ptr<Results> results;
+  DiagramScene* scene = nullptr;     // parented to view
+  QGraphicsView* view = nullptr;     // the tab page widget
+  SimController* sim = nullptr;
+  Component* selected = nullptr;
+  QString title;
+  QString path;                      // .umpnap path, or empty if unsaved
+  bool integrated = false;           // the merged plant run tab
+  std::vector<Document*> members;    // integrated: the member mimic documents
+};
 
 class MainWindow : public QMainWindow {
   Q_OBJECT
  public:
   MainWindow();
 
-  // Load a single mimic project from a path (command-line opening on launch).
+  // Open a single mimic (.umpnap) on its own tab.
   void openPath(const QString& path);
-  // Load a multi-mimic plant project (.umpproj): merges all member mimics into
-  // one integrated network so the whole plant simulates in unison.
+  // Open a multi-mimic plant project (.umpproj): one editable tab per member
+  // mimic plus an integrated tab that merges them and simulates in unison.
   void openPlantPath(const QString& path);
-  // Start the simulation engine running.
+  // Start the active document's simulation engine.
   void startSimulation();
 
  private slots:
@@ -42,26 +61,32 @@ class MainWindow : public QMainWindow {
   void cloneSelected();
   void saveInitialCondition();
   void loadInitialCondition();
-  void onSimUpdated();
-  void onSimModeChanged();
   void about();
+  void onTabChanged(int index);
+  void onTabCloseRequested(int index);
 
  private:
   void buildMenus();
   void buildSimToolbar();
+  Document* addDocument(std::unique_ptr<Network> net, const QString& title,
+                        const QString& path, bool integrated = false);
+  Document* activeDoc();
+  SimController* activeSim();
+  void bindActiveDocument();
+  void refreshProjectDock();
+  void rebuildIntegrated(Document* doc);
+  void onSimUpdated(Document* d);
+  void onSimModeChanged(Document* d);
+  void updateClock(Document* d);
 
-  Network net_;
-  Results results_;
-  SolverManager solver_;
-  SimController* sim_ = nullptr;
-  Component* selected_ = nullptr;
+  QTabWidget* tabs_ = nullptr;
+  std::vector<std::unique_ptr<Document>> docs_;  // aligned with tab index
 
-  DiagramScene* scene_ = nullptr;
-  QGraphicsView* view_ = nullptr;
   PaletteDock* palette_ = nullptr;
   PropertyEditor* properties_ = nullptr;
   HierarchyDock* hierarchy_ = nullptr;
   TrendDock* trends_ = nullptr;
+  ProjectDock* project_ = nullptr;
   QLabel* clock_ = nullptr;
 };
 

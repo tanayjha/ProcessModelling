@@ -36,7 +36,8 @@ bool isBranch(const std::string& type) {
          type == "Pump" || type == "HeatExchanger" || type == "Duct" ||
          type == "Damper" || type == "Fan" || type == "Blower" ||
          type == "Compressor" || type == "Filter" || type == "Strainer" ||
-         type == "ReliefValve" || type == "GasReliefValve";
+         type == "ReliefValve" || type == "GasReliefValve" ||
+         type == "TubeSide" || type == "ShellSide";
 }
 
 bool isTankType(const std::string& type) {
@@ -225,6 +226,27 @@ double hxK(const Component& c, double dP, const FluidProps& f) {
   return (fr * Leff / di + Kminor) * f.density / (2.0 * (N * At) * (N * At));
 }
 
+// ---- SHELL SIDE (split exchanger) -----------------------------------------
+//  Shell-side crossflow pressure drop (Kern-style lumped form). The crossflow
+//  area between baffles is  A_c = D_s * B * (1 - d_o/pt)  with shell ID D_s,
+//  baffle spacing B and tube pitch pt = pitchRatio * d_o. With shell velocity
+//  v = Q / A_c and a lumped crossflow loss coefficient (crossLossK + minorK):
+//        dP = (crossLossK + Kminor) * rho * v^2 / 2   =>   K = (...) * rho/(2 A_c^2).
+//  Ref: Kern, "Process Heat Transfer" (shell-side pressure drop).
+double shellK(const Component& c, const FluidProps& f) {
+  double Ds = c.param("shellID");
+  double B = c.param("baffleSpacing");
+  double pr = c.param("pitchRatio");
+  if (pr < 1.0) pr = 1.25;
+  double loss = c.param("crossLossK") + c.param("minorK");
+  if (loss <= 0.0) loss = 1.0;
+  double openFrac = 1.0 - 1.0 / pr;  // = 1 - d_o/pt, with pt = pitchRatio·d_o
+  if (openFrac < 0.05) openFrac = 0.05;
+  double Ac = Ds * B * openFrac;
+  if (Ac <= 0.0) return 0.0;
+  return loss * f.density / (2.0 * Ac * Ac);
+}
+
 // ---- PUMP -----------------------------------------------------------------
 //  Centrifugal pump head-vs-flow characteristic  H(Q)  [m].
 //  Two sources of the curve, in priority order:
@@ -321,8 +343,10 @@ BranchEval evalBranch(const Component& c, double dP, const FluidProps& f) {
     K = valveK(c, f);
   else if (c.type == "Orifice")
     K = orificeK(c, f);
-  else if (c.type == "HeatExchanger")
+  else if (c.type == "HeatExchanger" || c.type == "TubeSide")
     K = hxK(c, dP, f);
+  else if (c.type == "ShellSide")
+    K = shellK(c, f);
   else if (c.type == "Filter" || c.type == "Strainer")
     K = filterK(c);
   return resistanceFlow(dP, K);

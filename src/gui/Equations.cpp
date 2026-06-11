@@ -33,6 +33,30 @@ QString equationText(const std::string& type) {
            "  v_t = (Q/N)/A_t,  L_eff = L·passes\n"
            "  Duty (later): Q̇ = U·A_s·LMTD\n"
            "Ref: Kern; LMTD method.";
+  if (type == "TubeSide" || type == "ShellSide")
+    return "Split shell-and-tube exchanger (couple by thermalTag):\n"
+           "  tube ΔP = (f·L_eff/d_i + K)·ρv_t²/2\n"
+           "  shell ΔP = (crossLossK+K)·ρv²/2, v=Q/A_c\n"
+           "  Duty by ε-NTU: NTU = UA/Cmin, C = ρ|Q|cp\n"
+           "  ε(counterflow), Q̇ = ε·Cmin·(Th_in−Tc_in)\n"
+           "  UA = U·N·π·d_o·L; outlets from energy balance.\n"
+           "Ref: Kern; ε-NTU method.";
+  if (type == "Turbine")
+    return "Steam turbine (compressible swallowing):\n"
+           "  ṁ = C·sign(s)·√|s|,  s = P_in²−P_exh²\n"
+           "  C set from rated power / enthalpy drop\n"
+           "  Power = ṁ·Δh·η.  Ref: Stodola ellipse.";
+  if (type == "Transformer")
+    return "Ideal transformer (DC power-flow):\n"
+           "  V_hv = ratio·V_lv (turns ratio)\n"
+           "  power conserved; leakage Z not modelled.\n"
+           "Ref: modified nodal analysis.";
+  if (type == "Cable" || type == "Grid" || type == "Generator" ||
+      type == "Motor" || type == "ElectricalLoad" || type == "Busbar")
+    return "Linear DC power-flow (V = I·R):\n"
+           "  sources pin V; cables R=ρ_cu·L/A;\n"
+           "  loads G=P/V²; solved by nodal analysis.\n"
+           "Ref: resistive network / MNA.";
   if (type == "Tank")
     return "Vessel node + inventory:\n"
            "  P = p_top + ρg·level\n"

@@ -120,6 +120,37 @@ void registerHydraulicComponents() {
                     {"U", "W/m2K", 500.0, 0.0, 0.0},
                     {"elevation", "m", 0.0, 0.0, 0.0}}});
 
+  // Split shell-and-tube exchanger. ShellSide and TubeSide are SEPARATE flow
+  // elements (each a hydraulic branch on its own mimic) that exchange heat when
+  // they share a non-empty config["thermalTag"]. This lets the two streams live
+  // in different subsystems (e.g. shell in process cooling water, tube in the
+  // moderator loop) and still couple thermally in the integrated solve. The
+  // duty is computed by the effectiveness-NTU method each steady cycle; outlet
+  // temperatures are recorded as derived signals. (thermalTag is distinct from
+  // linkTag, which denotes a single shared physical instance.)
+  // Tube side: same tube-bundle hydraulics as HeatExchanger plus an inlet temp.
+  reg.registerDef({"TubeSide", H, "HXT", {{"in", IN}, {"out", OUT}},
+                   {{"tubeLength", "m", 4.0, 0.0, 0.0},
+                    {"tubeID", "m", 0.016, 1e-3, 0.0},
+                    {"tubeOD", "m", 0.019, 1e-3, 0.0},
+                    {"numTubes", "-", 100.0, 1.0, 0.0},
+                    {"numPasses", "-", 2.0, 1.0, 0.0},
+                    {"roughness", "m", 1.5e-6, 0.0, 0.0},
+                    {"minorK", "-", 2.0, 0.0, 0.0},
+                    {"U", "W/m2K", 500.0, 0.0, 0.0},
+                    {"Tin", "C", 90.0, 0.0, 0.0},
+                    {"elevation", "m", 0.0, 0.0, 0.0}}});
+  // Shell side: shell crossflow resistance (Kern-style) plus an inlet temp.
+  reg.registerDef({"ShellSide", H, "HXS", {{"in", IN}, {"out", OUT}},
+                   {{"shellID", "m", 0.4, 1e-3, 0.0},
+                    {"baffleSpacing", "m", 0.3, 1e-3, 0.0},
+                    {"tubeOD", "m", 0.019, 1e-3, 0.0},
+                    {"pitchRatio", "-", 1.25, 1.0, 0.0},
+                    {"crossLossK", "-", 4.0, 0.0, 0.0},
+                    {"minorK", "-", 2.0, 0.0, 0.0},
+                    {"Tin", "C", 30.0, 0.0, 0.0},
+                    {"elevation", "m", 0.0, 0.0, 0.0}}});
+
   // Filter / strainer: clean-element resistance from a rated ΔP at rated flow.
   reg.registerDef({"Filter", H, "FL", {{"in", IN}, {"out", OUT}},
                    {{"ratedFlow", "m3/s", 0.05, 1e-6, 0.0},
