@@ -15,6 +15,7 @@ const Entry kTable[] = {
     {"Air",                         {1.204,  1.82e-5, 1005.0, 0.0257}, true},
     {"Helium",                      {0.1786, 1.96e-5, 5193.0, 0.152}, true},
     {"Nitrogen",                    {1.165,  1.78e-5, 1040.0, 0.026}, true},
+    {"Carbon Dioxide",              {1.842,  1.48e-5, 849.0,  0.0166}, true},
 };
 }  // namespace
 

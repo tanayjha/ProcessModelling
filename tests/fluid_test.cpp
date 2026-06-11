@@ -4,9 +4,10 @@
 using namespace umpnap;
 
 int main() {
-  CHECK(FluidLibrary::names().size() == 8);
+  CHECK(FluidLibrary::names().size() == 9);
   CHECK(FluidLibrary::liquids().size() == 5);
-  CHECK(FluidLibrary::gases().size() == 3);
+  CHECK(FluidLibrary::gases().size() == 4);
+  CHECK(FluidLibrary::isGas("Carbon Dioxide"));
   CHECK(FluidLibrary::has("Light Water"));
   CHECK(FluidLibrary::has("Heavy Water (D2O)"));
   CHECK(FluidLibrary::has("Borated Water (boron)"));

@@ -57,12 +57,16 @@ void PropertyEditor::rebuild() {
   // Fluid selector (only meaningful for hydraulic-domain components). Tanks and
   // other vessels with a vapour space carry a separate cover-gas fluid.
   bool isVessel = comp_->hasPort("gas");
+  // Air/Gas-library components default to a gas working fluid; they must only
+  // offer gases, never liquids.
+  bool isGasComp = def && FluidLibrary::isGas(def->defaultFluid);
   if (def && def->domain == Domain::Hydraulic) {
     auto* fluidBox = new QComboBox(body_);
-    // A vessel's main fluid is its liquid contents, so list liquids only;
-    // a generic line component may carry any fluid.
-    const auto& fluidList =
-        isVessel ? FluidLibrary::liquids() : FluidLibrary::names();
+    // A gas component lists gases only; a vessel's main fluid is its liquid
+    // contents, so list liquids only; a generic line component carries any fluid.
+    const auto& fluidList = isGasComp    ? FluidLibrary::gases()
+                            : isVessel   ? FluidLibrary::liquids()
+                                         : FluidLibrary::names();
     for (const auto& n : fluidList) fluidBox->addItem(QString::fromStdString(n));
     fluidBox->setCurrentText(QString::fromStdString(comp_->fluid));
     connect(fluidBox, &QComboBox::currentTextChanged, this,
