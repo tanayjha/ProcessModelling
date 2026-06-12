@@ -11,6 +11,7 @@
 
 #include "components/hydraulic/BranchLaw.h"
 #include "core/ComponentRegistry.h"
+#include "core/FluidLibrary.h"
 #include "core/Results.h"
 #include "gui/DiagramItems.h"
 #include "solver/NodeGraph.h"
@@ -32,21 +33,24 @@ QString mediumName(Medium m) {
 
 // Live readout string for a component from the latest results.
 QString runtimeText(const Component* c, const NodeGraph& g, const Results& res) {
-  auto pressureBar = [&](const std::string& port) -> QString {
+  // Standard display units: pressure in kPa, flow as mass flow in kg/s.
+  auto pressureKpa = [&](const std::string& port) -> QString {
     int n = g.nodeOf(c->id, port);
     if (n < 0) return QString();
     double pa = res.latest("node." + std::to_string(n) + ".pressure");
     if (pa == 0.0) return QString();
-    return QString("P=%1 bar").arg(pa / 1e5, 0, 'f', 2);
+    return QString("P=%1 kPa").arg(pa / 1e3, 0, 'f', 1);
   };
   QString flowStr;
-  double q = res.latest("comp." + std::to_string(c->id) + ".flow");
-  if (isBranch(c->type))
-    flowStr = QString("Q=%1 m³/s").arg(q, 0, 'g', 3);
+  double q = res.latest("comp." + std::to_string(c->id) + ".flow");  // m³/s
+  if (isBranch(c->type)) {
+    double mdot = q * FluidLibrary::props(c->fluid).density;  // kg/s
+    flowStr = QString("ṁ=%1 kg/s").arg(mdot, 0, 'g', 3);
+  }
 
   if (c->type == "Tank" || c->type == "PressurizedTank")
-    return QString("L=%1 m\n%2").arg(c->param("level"), 0, 'f', 2).arg(pressureBar("p"));
-  if (c->type == "Boundary") return pressureBar("p");
+    return QString("L=%1 m\n%2").arg(c->param("level"), 0, 'f', 2).arg(pressureKpa("p"));
+  if (c->type == "Boundary") return pressureKpa("p");
   if (c->type == "Pump") {
     double h = res.latest("comp." + std::to_string(c->id) + ".head");
     return QString("%1\nH=%2 m").arg(flowStr).arg(h, 0, 'f', 1);
@@ -55,7 +59,7 @@ QString runtimeText(const Component* c, const NodeGraph& g, const Results& res) 
     return QString("%1\n%2% open").arg(flowStr).arg(c->param("position") * 100.0, 0, 'f', 0);
   if (isBranch(c->type)) return flowStr;
   if (c->domain != Domain::Hydraulic) return QString();
-  return pressureBar(c->ports.empty() ? "" : c->ports.front().name);
+  return pressureKpa(c->ports.empty() ? "" : c->ports.front().name);
 }
 
 // Signed flow from the A endpoint toward the B endpoint of a connection.
