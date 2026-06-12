@@ -37,6 +37,7 @@ class DiagramScene : public QGraphicsScene {
   void componentSelected(umpnap::Component* c);  // nullptr when cleared
   void networkChanged();
   void connectionRejected(const QString& reason);
+  void undoRequested();  // Ctrl/Cmd+Z on the canvas (focus-proof undo path)
 
  protected:
   void mousePressEvent(QGraphicsSceneMouseEvent* e) override;

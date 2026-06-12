@@ -36,6 +36,10 @@ class Network {
   int nextId() const { return nextId_; }
   void setNextId(int v) { nextId_ = v; }
 
+  // Saved trend ("graph") configuration: the raw Results keys the user chose to
+  // plot, persisted with the project so the same signals re-plot on reload.
+  std::vector<std::string> trendKeys;
+
   // Deep-copy support for undo: clone() returns an independent copy; copyFrom()
   // replaces this network's contents in place (preserving the object identity
   // that scenes/solvers hold a pointer to).

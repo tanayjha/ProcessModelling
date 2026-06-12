@@ -4,6 +4,7 @@
 #include <QGraphicsSceneMouseEvent>
 #include <QGraphicsView>
 #include <QKeyEvent>
+#include <QKeySequence>
 #include <QMessageBox>
 #include <QPen>
 #include <tuple>
@@ -250,6 +251,13 @@ void DiagramScene::mouseReleaseEvent(QGraphicsSceneMouseEvent* e) {
 }
 
 void DiagramScene::keyPressEvent(QKeyEvent* e) {
+  // Undo (Cmd/Ctrl+Z): route through the window so a focused view/scene can't
+  // swallow the shortcut. accept() prevents the menu shortcut also firing.
+  if (e->matches(QKeySequence::Undo)) {
+    emit undoRequested();
+    e->accept();
+    return;
+  }
   if (e->key() == Qt::Key_Delete || e->key() == Qt::Key_Backspace) {
     std::vector<int> compsToDelete;
     // Connections to remove, as endpoint tuples (component id + port name).

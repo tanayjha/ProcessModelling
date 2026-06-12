@@ -123,6 +123,7 @@ Document* MainWindow::addDocument(std::unique_ptr<Network> net,
   });
   connect(d->scene, &DiagramScene::connectionRejected, this,
           [this](const QString& r) { statusBar()->showMessage(r, 5000); });
+  connect(d->scene, &DiagramScene::undoRequested, this, &MainWindow::undo);
   connect(d->sim, &SimController::updated, this, [this, d]() { onSimUpdated(d); });
   connect(d->sim, &SimController::modeChanged, this,
           [this, d]() { onSimModeChanged(d); });
@@ -344,6 +345,16 @@ void MainWindow::buildMenus() {
                          static_cast<QDockWidget*>(trends_)})
     if (d) view->addAction(d->toggleViewAction());
   view->addSeparator();
+  view->addAction("Configure && Save Graph", this, [this]() {
+    Document* d = activeDoc();
+    if (!d) return;
+    trends_->saveConfigTo(d->net.get());
+    statusBar()->showMessage(
+        QString("Saved %1 plotted signal(s) to the graph config — persists when "
+                "you save the project.")
+            .arg(d->net->trendKeys.size()),
+        5000);
+  });
   view->addAction("Restore All Panels", this, [this]() {
     for (QDockWidget* d : {static_cast<QDockWidget*>(palette_),
                            static_cast<QDockWidget*>(project_),

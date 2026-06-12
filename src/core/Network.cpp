@@ -113,6 +113,7 @@ void Network::copyFrom(const Network& other) {
     comps_.push_back(std::make_unique<Component>(*c));
   conns_ = other.conns_;
   nextId_ = other.nextId_;
+  trendKeys = other.trendKeys;
 }
 
 std::unique_ptr<Network> Network::clone() const {

@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <set>
 
 #include "core/Network.h"
 #include "core/Results.h"
@@ -141,6 +142,18 @@ void TrendDock::refreshKeys() {
     item->setData(kKeyRole, QString::fromStdString(k));
   }
 
+  // If the project carries a saved graph configuration, re-select exactly those
+  // signals (the user's configured plot) instead of auto-selecting.
+  if (net_ && !net_->trendKeys.empty()) {
+    std::set<std::string> want(net_->trendKeys.begin(), net_->trendKeys.end());
+    for (int i = 0; i < list_->count(); ++i) {
+      auto* item = list_->item(i);
+      if (want.count(itemKey(item))) item->setSelected(true);
+    }
+    updatePlot();
+    return;
+  }
+
   // Auto-select signals that actually change, so a curve appears immediately
   // after a run without the user having to know to click. Capped to avoid
   // clutter; the user can adjust the selection afterwards.
@@ -165,6 +178,13 @@ void TrendDock::refreshKeys() {
       list_->item(i)->setSelected(true);
 
   updatePlot();
+}
+
+void TrendDock::saveConfigTo(Network* net) const {
+  if (!net) return;
+  net->trendKeys.clear();
+  for (auto* item : list_->selectedItems())
+    net->trendKeys.push_back(itemKey(item));
 }
 
 void TrendDock::liveUpdate() {

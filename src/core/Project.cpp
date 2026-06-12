@@ -214,7 +214,14 @@ bool saveProject(const Network& net, const std::string& path) {
     if (i + 1 < conns.size()) f << ",";
     f << "\n";
   }
-  f << "  ]\n}\n";
+  f << "  ],\n";
+  // Saved trend ("graph") configuration: raw Results keys to re-plot on reload.
+  f << "  \"trends\": [";
+  for (size_t i = 0; i < net.trendKeys.size(); ++i) {
+    if (i) f << ", ";
+    f << "\"" << esc(net.trendKeys[i]) << "\"";
+  }
+  f << "]\n}\n";
   return true;
 }
 
@@ -288,6 +295,13 @@ bool loadProject(Network& net, const std::string& path) {
                   (int)cn.numOr("compB", 0), cn.strOr("portB", ""));
     }
   }
+
+  // Saved trend ("graph") configuration.
+  net.trendKeys.clear();
+  const JValue* trends = root.get("trends");
+  if (trends && trends->type == JValue::Arr)
+    for (const auto& t : trends->arr)
+      if (t.type == JValue::Str) net.trendKeys.push_back(t.str);
   return true;
 }
 

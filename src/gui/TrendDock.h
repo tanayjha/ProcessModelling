@@ -26,6 +26,9 @@ class TrendDock : public QDockWidget {
   void setNetwork(const Network* net) { net_ = net; }
   void refreshKeys();   // repopulate the signal list from results
   void liveUpdate();    // during a run: populate once, then just replot
+  // Persist the currently-plotted signal selection into the network ("Configure
+  // Graph" save) so the same signals re-plot when the project is reopened.
+  void saveConfigTo(Network* net) const;
 
  private slots:
   void updatePlot();
