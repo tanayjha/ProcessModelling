@@ -31,6 +31,13 @@ inline EnumSpec enumOptions(const std::string& name) {
     return {"Action", {"Normal", "Reverse"}};
   if (name == "xchar")
     return {"Characteristic", {"Linear", "Square-root", "Square"}};
+  if (name == "material")
+    return {"Material",
+            {"Carbon steel", "Stainless steel", "Cast iron", "Copper",
+             "PVC", "Concrete"}};
+  if (name == "surfaceFinish")
+    return {"Inner surface finish",
+            {"Smooth", "Commercial", "Galvanized", "Fouled", "Badly fouled"}};
   return {};
 }
 

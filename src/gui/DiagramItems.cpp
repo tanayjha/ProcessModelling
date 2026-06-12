@@ -81,7 +81,7 @@ void drawSymbol(QPainter* p, const std::string& type, const Component& c,
     p->drawLine(QPointF(g.right() - 6, cy - off - 4), QPointF(g.right() - 6, cy + off + 4));
 
   } else if (type == "Valve" || type == "Damper" || type == "ASDV" ||
-             type == "CSDV") {
+             type == "CSDV" || type == "NonReturnValve") {
     // Bowtie (two triangles meeting at the stem centre).
     QPolygonF bow;
     bow << QPointF(g.left() + 2, cy - r) << QPointF(cx, cy)
@@ -91,6 +91,10 @@ void drawSymbol(QPainter* p, const std::string& type, const Component& c,
     bow2 << QPointF(g.right() - 2, cy - r) << QPointF(cx, cy)
          << QPointF(g.right() - 2, cy + r);
     p->drawPolygon(bow2);
+    // Check valve: a disc/seat bar on the outlet side marks the one-way action.
+    if (type == "NonReturnValve") {
+      p->drawLine(QPointF(cx + r * 0.5, cy - r), QPointF(cx + r * 0.5, cy + r));
+    }
 
   } else if (type == "ReliefValve" || type == "GasReliefValve") {
     // Angle relief valve: a bowtie body with a spring coil on the bonnet.

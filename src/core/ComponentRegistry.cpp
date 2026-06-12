@@ -54,26 +54,41 @@ void registerHydraulicComponents() {
                    {{"pressure", "Pa", 2.0e5, 0.0, 0.0},
                     {"elevation", "m", 0.0, 0.0, 0.0}}});
 
-  // Vertical cylindrical tank with a liquid port (p) and a cover-gas tapping
-  // (gas) so an air/gas network can be drawn to the vapour space.
-  reg.registerDef({"Tank", H, "TK",
-                   {{"p", BI, Medium::Process}, {"gas", BI, GAS}},
-                   {{"diameter", "m", 2.0, 1e-3, 0.0},
-                    {"height", "m", 6.0, 0.0, 0.0},
-                    {"level", "m", 2.0, 0.0, 0.0},
-                    {"p_top", "Pa", 1.013e5, 0.0, 0.0},
-                    {"elevation", "m", 0.0, 0.0, 0.0}}});
+  // Vertical cylindrical tank with 20 interchangeable liquid tappings
+  // (p, p1..p19 -- all collapse onto the one vessel node) for many in/out
+  // flows, plus a cover-gas tapping (gas) so an air/gas network can be drawn to
+  // the vapour space.
+  {
+    std::vector<Port> tkPorts;
+    tkPorts.push_back({"p", BI, Medium::Process});
+    for (int i = 1; i <= 19; ++i)
+      tkPorts.push_back({"p" + std::to_string(i), BI, Medium::Process});
+    tkPorts.push_back({"gas", BI, GAS});
+    reg.registerDef({"Tank", H, "TK", tkPorts,
+                     {{"diameter", "m", 2.0, 1e-3, 0.0},
+                      {"height", "m", 6.0, 0.0, 0.0},
+                      {"level", "m", 2.0, 0.0, 0.0},
+                      {"p_top", "Pa", 1.013e5, 0.0, 0.0},
+                      {"elevation", "m", 0.0, 0.0, 0.0}}});
+  }
 
   // Pipe: Darcy-Weisbach + minor losses + static head. ID drives flow area;
   // OD is wall info. dZ = outlet elevation - inlet elevation (positive: outlet
   // higher than inlet, i.e. flow climbs from inlet -> outlet).
+  // dZ is the RHS(outlet)-above-LHS(inlet) height. frictionFactor>0 overrides the
+  // computed Darcy f; surfaceFinish scales roughness (smooth..badly-fouled);
+  // material is informational. insulationThk feeds future heat-loss modelling.
   reg.registerDef({"Pipe", H, "L", {{"in", IN}, {"out", OUT}},
-                   {{"length", "m", 10.0, 0.0, 0.0},
+                   {{"dZ", "m", 0.0, 0.0, 0.0},
                     {"ID", "m", 0.1, 1e-3, 0.0},
                     {"OD", "m", 0.114, 1e-3, 0.0},
+                    {"length", "m", 10.0, 0.0, 0.0},
+                    {"insulationThk", "m", 0.05, 0.0, 0.0},
+                    {"frictionFactor", "-", 0.0, 0.0, 0.0},
                     {"roughness", "m", 4.5e-5, 0.0, 0.0},
+                    {"material", "0..5", 0.0, 0.0, 5.0},
+                    {"surfaceFinish", "0..4", 1.0, 0.0, 4.0},
                     {"minorK", "-", 0.0, 0.0, 0.0},
-                    {"dZ", "m", 0.0, 0.0, 0.0},
                     {"tuning", "-", 1.0, 0.0, 0.0}}});
 
   // Control valve sized by metric flow coefficient Kv with an inherent
@@ -178,17 +193,25 @@ void registerHydraulicComponents() {
 
   // Pressurised / gas-blanketed tank: liquid port + cover-gas tapping; the top
   // pressure is the blanket gas pressure.
-  reg.registerDef({"PressurizedTank", H, "PTK",
-                   {{"p", BI, Medium::Process}, {"gas", BI, GAS}},
-                   {{"diameter", "m", 2.0, 1e-3, 0.0},
-                    {"height", "m", 6.0, 0.0, 0.0},
-                    {"level", "m", 3.0, 0.0, 0.0},
-                    {"p_top", "Pa", 5.0e5, 0.0, 0.0},
-                    {"elevation", "m", 0.0, 0.0, 0.0}}});
+  {
+    std::vector<Port> ptkPorts;
+    ptkPorts.push_back({"p", BI, Medium::Process});
+    for (int i = 1; i <= 19; ++i)
+      ptkPorts.push_back({"p" + std::to_string(i), BI, Medium::Process});
+    ptkPorts.push_back({"gas", BI, GAS});
+    reg.registerDef({"PressurizedTank", H, "PTK", ptkPorts,
+                     {{"diameter", "m", 2.0, 1e-3, 0.0},
+                      {"height", "m", 6.0, 0.0, 0.0},
+                      {"level", "m", 3.0, 0.0, 0.0},
+                      {"p_top", "Pa", 5.0e5, 0.0, 0.0},
+                      {"elevation", "m", 0.0, 0.0, 0.0}}});
+  }
 
   // ------------------------ Pneumatic / air (solving) ---------------------
   // These reuse the hydraulic laws but default to Air as the working fluid:
   // a Duct is a pipe, a Damper a valve, a Fan/Blower/Compressor a pump.
+  // Duct: pipe hydraulics (geometry drives the flow law) plus the air-gas
+  // datasheet fields used in network sizing/thermal bookkeeping.
   reg.registerDef({"Duct", H, "DCT", {{"in", IN}, {"out", OUT}},
                    {{"length", "m", 10.0, 0.0, 0.0},
                     {"ID", "m", 0.3, 1e-3, 0.0},
@@ -196,22 +219,53 @@ void registerHydraulicComponents() {
                     {"roughness", "m", 9.0e-5, 0.0, 0.0},
                     {"minorK", "-", 0.0, 0.0, 0.0},
                     {"dZ", "m", 0.0, 0.0, 0.0},
-                    {"tuning", "-", 1.0, 0.0, 0.0}},
+                    {"tuning", "-", 1.0, 0.0, 0.0},
+                    {"ratedFlow", "kg/s", 10.0, 0.0, 0.0},
+                    {"ratedDP", "Pa", 1.0e3, 0.0, 0.0},
+                    {"ratedTemp", "C", 40.0, 0.0, 0.0},
+                    {"ductVolume", "m3", 5.0, 0.0, 0.0},
+                    {"gasMetalArea", "m2", 20.0, 0.0, 0.0},
+                    {"metalMass", "kg", 500.0, 0.0, 0.0},
+                    {"flowArea", "m2", 0.07, 0.0, 0.0}},
                    "Air"});
+  // Damper: control-valve flow law (Kv) plus air-gas rated/thermal datasheet.
   reg.registerDef({"Damper", H, "DMP",
                    {{"in", IN}, {"out", OUT}, {"act", BI, SIG}},
                    {{"Kv", "m3/h/bar^0.5", 500.0, 1e-3, 0.0},
                     {"characteristic", "0/1/2", 0.0, 0.0, 2.0},
                     {"rangeability", "-", 30.0, 1.1, 0.0},
-                    {"position", "-", 1.0, 0.0, 1.0}},
+                    {"position", "-", 1.0, 0.0, 1.0},
+                    {"ratedFlow", "kg/s", 10.0, 0.0, 0.0},
+                    {"ratedDP", "Pa", 1.0e3, 0.0, 0.0},
+                    {"ratedTemp", "C", 40.0, 0.0, 0.0},
+                    {"metalMass", "kg", 200.0, 0.0, 0.0},
+                    {"flowArea", "m2", 0.07, 0.0, 0.0},
+                    {"fixedLeakage", "%", 0.5, 0.0, 100.0},
+                    {"metalAmbientHT", "kW/C", 0.5, 0.0, 0.0}},
                    "Air"});
+  // Fan: pump-style head-flow law (uses a fitted (Q,H) "head" curve if present,
+  // else shutoff/rated points). The remaining fields are the air-gas datasheet.
   reg.registerDef({"Fan", H, "FAN",
                    {{"in", IN}, {"out", OUT}, {"drive", BI, ELEC}},
                    {{"ratedFlow", "m3/s", 2.0, 0.0, 0.0},
                     {"ratedHead", "m", 30.0, 0.0, 0.0},
                     {"shutoffHead", "m", 40.0, 0.0, 0.0},
                     {"efficiency", "-", 0.7, 0.0, 1.0},
-                    {"speedRatio", "-", 1.0, 0.0, 0.0}},
+                    {"speedRatio", "-", 1.0, 0.0, 0.0},
+                    {"ratedMassFlow", "kg/s", 12.0, 0.0, 0.0},
+                    {"ratedTemp", "C", 40.0, 0.0, 0.0},
+                    {"ratedPressHead", "Pa", 3.0e3, 0.0, 0.0},
+                    {"ratedTorque", "kN.m", 2.0, 0.0, 0.0},
+                    {"ratedSpeed", "rpm", 1480.0, 0.0, 0.0},
+                    {"torqueZeroSpeed", "kN.m", 0.5, 0.0, 0.0},
+                    {"effMinFlow", "-", 0.5, 0.0, 1.0},
+                    {"effMaxFlow", "-", 0.8, 0.0, 1.0},
+                    {"minFlow", "kg/s", 2.0, 0.0, 0.0},
+                    {"fanVolume", "m3", 3.0, 0.0, 0.0},
+                    {"gasMetalArea", "m2", 15.0, 0.0, 0.0},
+                    {"metalAmbientHT", "kW/C", 0.5, 0.0, 0.0},
+                    {"mass", "kg", 800.0, 0.0, 0.0},
+                    {"flowArea", "m2", 0.5, 0.0, 0.0}},
                    "Air"});
   reg.registerDef({"Blower", H, "BLW",
                    {{"in", IN}, {"out", OUT}, {"drive", BI, ELEC}},
@@ -262,6 +316,22 @@ void registerHydraulicComponents() {
                     {"Kv", "m3/h/bar^0.5", 300.0, 1e-3, 0.0},
                     {"position", "-", 0.0, 0.0, 1.0},
                     {"elevation", "m", 0.0, 0.0, 0.0}},
+                   "Air"});
+
+  // Air/gas non-return (check) valve: passes forward flow (in->out) with a
+  // quadratic resistance sized from a rated mass-flow / ΔP point, and blocks
+  // reverse flow. The remaining fields are the air-gas datasheet (volume, metal
+  // mass, heat-transfer areas, leakage).
+  reg.registerDef({"NonReturnValve", H, "NRV", {{"in", IN}, {"out", OUT}},
+                   {{"ratedFlow", "kg/s", 10.0, 0.0, 0.0},
+                    {"ratedDP", "Pa", 2.0e3, 0.0, 0.0},
+                    {"ratedTemp", "C", 40.0, 0.0, 0.0},
+                    {"volume", "m3", 0.5, 0.0, 0.0},
+                    {"gasMetalArea", "m2", 2.0, 0.0, 0.0},
+                    {"metalAmbientHT", "kW/C", 0.1, 0.0, 0.0},
+                    {"metalMass", "kg", 50.0, 0.0, 0.0},
+                    {"flowArea", "m2", 0.05, 0.0, 0.0},
+                    {"fixedLeakage", "%", 0.1, 0.0, 100.0}},
                    "Air"});
 
   // ----------------------- Electrical (library symbols) -------------------

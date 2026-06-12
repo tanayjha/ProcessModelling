@@ -129,7 +129,9 @@ void PlantDataDialog::buildTabFor(const std::string& type) {
   const ComponentDef* def = ComponentRegistry::instance().find(type);
   if (!def) return;
   bool hydraulic = def->domain == Domain::Hydraulic;
-  bool isPump = type == "Pump";
+  // Pump-style turbomachines all carry an editable (Q,H) head curve.
+  bool isPump = type == "Pump" || type == "Fan" || type == "Blower" ||
+                type == "Compressor";
 
   // Gather instances of this type.
   std::vector<Component*> comps;

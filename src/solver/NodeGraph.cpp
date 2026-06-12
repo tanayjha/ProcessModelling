@@ -90,11 +90,15 @@ NodeGraph buildNodeGraph(const Network& net) {
     if (a != portIndex.end() && b != portIndex.end()) uf.unite(a->second, b->second);
   }
   // Union all ports of each Junction (ideal zero-drop node) and each
-  // AirReceiver (all tappings share one vessel pressure node).
+  // AirReceiver (all tappings share one vessel pressure node). Tanks have many
+  // liquid tappings (p, p1..p19) that share the one vessel node, but their
+  // separate cover-gas port must NOT be unioned (it is pinned to blanket P).
   for (const auto& c : net.components()) {
-    if (c->type != "Junction" && c->type != "AirReceiver") continue;
+    bool tank = c->type == "Tank" || c->type == "PressurizedTank";
+    if (c->type != "Junction" && c->type != "AirReceiver" && !tank) continue;
     int first = -1;
     for (const auto& p : c->ports) {
+      if (tank && p.name == "gas") continue;  // cover-gas stays a separate node
       auto it = portIndex.find({c->id, p.name});
       if (it == portIndex.end()) continue;
       if (first < 0) first = it->second;

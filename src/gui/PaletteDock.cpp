@@ -15,7 +15,7 @@ QString libraryOf(const ComponentDef& d) {
   static const std::set<std::string> air = {"Duct",      "Damper",
                                              "Fan",       "Blower",
                                              "Compressor", "AirReceiver",
-                                             "GasReliefValve"};
+                                             "GasReliefValve", "NonReturnValve"};
   static const std::set<std::string> steam = {"SteamGenerator", "Turbine",
                                               "Condenser", "Deaerator",
                                               "ASDV", "CSDV"};

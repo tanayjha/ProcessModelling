@@ -37,7 +37,7 @@ bool isBranch(const std::string& type) {
          type == "Damper" || type == "Fan" || type == "Blower" ||
          type == "Compressor" || type == "Filter" || type == "Strainer" ||
          type == "ReliefValve" || type == "GasReliefValve" ||
-         type == "TubeSide" || type == "ShellSide";
+         type == "NonReturnValve" || type == "TubeSide" || type == "ShellSide";
 }
 
 bool isTankType(const std::string& type) {
@@ -106,13 +106,39 @@ double pipeK(const Component& c, double dP, const FluidProps& f) {
   if (D <= 0.0) return 0.0;
   double A = kPi * D * D / 4.0;
 
+  // Inner surface finish scales the absolute roughness (smooth .. badly fouled).
+  static const double kFinishMult[] = {0.2, 1.0, 2.0, 5.0, 15.0};
+  int finish = (int)std::lround(c.param("surfaceFinish"));
+  if (finish >= 0 && finish < 5) rough *= kFinishMult[finish];
+
   // Provisional flow estimate from the current dP to evaluate Re, then f.
   double Kseed = 0.02 * (L / D) * f.density / (2.0 * A * A);
   double q = std::sqrt(std::fabs(dP) / (Kseed > 0 ? Kseed : 1.0));
   double v = q / A;
   double Re = f.density * v * D / f.viscosity;
-  double fr = frictionFactor(Re, rough / D);
+  // A user-supplied frictionFactor > 0 overrides the computed Darcy f.
+  double userF = c.param("frictionFactor");
+  double fr = (userF > 0.0) ? userF : frictionFactor(Re, rough / D);
   return (fr * L / D + Kminor) * f.density / (2.0 * A * A) * tuning;
+}
+
+// ---- NON-RETURN (CHECK) VALVE ---------------------------------------------
+//  Air/gas check valve. Forward flow (in->out, dP > 0) sees a quadratic
+//  resistance sized from a rated mass-flow / rated-ΔP datasheet point:
+//        Q_rated_vol = ratedFlow[kg/s] / rho,   K = ratedDP / Q_rated_vol^2.
+//  Reverse flow is blocked (very large resistance), leaving only a small
+//  `fixedLeakage` fraction of the forward conductance. One-way like a relief.
+double nrvK(const Component& c, double dP, const FluidProps& f) {
+  double mdot = c.param("ratedFlow");   // kg/s
+  double dPr = c.param("ratedDP");      // Pa
+  double rho = (f.density > 1e-9) ? f.density : 1.2;
+  double Qr = mdot / rho;               // m^3/s at rated
+  if (Qr <= 0.0 || dPr <= 0.0) return 0.0;
+  double Kfwd = dPr / (Qr * Qr);
+  if (dP >= 0.0) return Kfwd;           // forward: rated resistance
+  // Reverse: blocked except a tiny leakage path (resistance scaled up).
+  double leak = std::clamp(c.param("fixedLeakage") / 100.0, 1e-4, 1.0);
+  return Kfwd / (leak * leak);          // much larger K -> near-zero reverse flow
 }
 
 // ---- VALVE ----------------------------------------------------------------
@@ -338,6 +364,9 @@ BranchEval evalBranch(const Component& c, double dP, const FluidProps& f) {
   // Relief/safety valves open on the pressure differential across them.
   if (c.type == "ReliefValve" || c.type == "GasReliefValve")
     return resistanceFlow(dP, reliefK(c, dP, f));
+  // Non-return (check) valve: forward-only quadratic resistance.
+  if (c.type == "NonReturnValve")
+    return resistanceFlow(dP, nrvK(c, dP, f));
   double K = 0.0;
   if (c.type == "Valve" || c.type == "Damper")
     K = valveK(c, f);
