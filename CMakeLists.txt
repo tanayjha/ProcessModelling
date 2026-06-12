@@ -16,6 +16,10 @@ target_include_directories(umpnap_engine PUBLIC ${CMAKE_SOURCE_DIR}/src)
 
 add_subdirectory(tests)
 
+# ---- Documentation generator (engine-only helper) ----
+add_executable(gen_component_specs tools/gen_component_specs.cpp)
+target_link_libraries(gen_component_specs PRIVATE umpnap_engine)
+
 # ---- Example generator (engine-only helper) ----
 add_executable(make_example examples/make_loop.cpp)
 target_link_libraries(make_example PRIVATE umpnap_engine)

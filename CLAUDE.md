@@ -15,6 +15,10 @@ solver with a gas fluid; electrical and two-phase steam are wireable library
 symbols pending dedicated solvers.
 
 - **Features, build/run, "how to add a component", validation** → `README.md`
+- **Per-component PRD/spec sheet (ports, params, units, governing law, solver
+  role for every type)** → `docs/COMPONENT_SPECS.md` — **generated**, never
+  hand-edited; rebuild with `./build/gen_component_specs` (engine-only tool
+  `tools/gen_component_specs.cpp`) after touching the registry or branch laws.
 - **Governing equations of every model + the network solve** → `docs/EQUATIONS.md`
 - **Original design rationale / plan** → `docs/superpowers/specs/2026-06-06-umpnap-design.md`, `docs/superpowers/plans/2026-06-06-umpnap.md`
 - **Annotated screenshots** → `docs/umpnap_*.png`

@@ -34,6 +34,10 @@ heavy-water loop — Tank → Pump → Pipe → Heat Exchanger → Valve → Tan
   Heat Exchanger (shell-and-tube tube-side). Every law is heavily commented in
   `src/components/hydraulic/BranchLaw.cpp`; full write-up in
   [`docs/EQUATIONS.md`](EQUATIONS.md); summary shown live in the Properties dock.
+  A per-component PRD/spec sheet (every type's ports, parameters with units and
+  bounds, governing law, and solver role) is auto-generated from the registry in
+  [`docs/COMPONENT_SPECS.md`](docs/COMPONENT_SPECS.md) — rebuild with
+  `./build/gen_component_specs`.
 - **Pump head–flow curve editor**: enter measured `(Q,H)` points; a least-squares
   quadratic (in-tree LU) drives the model.
 - **Hydraulic solver**: nodal pressure formulation, Newton-Raphson with a dense LU
