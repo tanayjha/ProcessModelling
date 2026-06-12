@@ -279,7 +279,8 @@ void drawSymbol(QPainter* p, const std::string& type, const Component& c,
         {"Grid", "~"},   {"Generator", "G"},    {"Motor", "M"},
         {"ElectricalLoad", "L"}, {"Cable", "—"}, {"Transmitter", "T"},
         {"Switch", "S"}, {"RTD", "TE"},         {"Gauge", "I"},
-        {"Controller", "PID"}, {"Timer", "TMR"}, {"Logic", "&"}};
+        {"Controller", "PID"}, {"Timer", "TMR"}, {"Logic", "&"},
+        {"SolenoidActuator", "SOL"}, {"AnalogTransmitter", "AT"}};
     QString code = QString::fromStdString(type.substr(0, 1));
     for (auto& kv : codes)
       if (type == kv.first) { code = kv.second; break; }

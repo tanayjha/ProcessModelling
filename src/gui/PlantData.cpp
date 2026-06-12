@@ -13,6 +13,7 @@
 #include "core/ComponentRegistry.h"
 #include "core/FluidLibrary.h"
 #include "core/Network.h"
+#include "gui/EnumParams.h"
 
 namespace umpnap {
 
@@ -177,15 +178,16 @@ void PlantDataDialog::buildTabFor(const std::string& type) {
 
     // Parameters (editable numeric text; header label == param name).
     for (const auto& ps : def->params) {
-      if (ps.name == "characteristic") {
+      if (EnumSpec es = enumOptions(ps.name); !es.options.isEmpty()) {
         auto* combo = new QComboBox(table);
-        combo->addItems({"Linear", "Equal-percentage", "Quick-opening"});
-        int idx = (int)c->param("characteristic");
-        combo->setCurrentIndex(idx < 0 || idx > 2 ? 1 : idx);
+        combo->addItems(es.options);
+        int idx = (int)c->param(ps.name);
+        combo->setCurrentIndex(idx < 0 || idx >= es.options.size() ? 0 : idx);
         Component* cap = c;
+        std::string key = ps.name;
         connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-                [this, cap](int i) {
-                  cap->params["characteristic"] = i;
+                [this, cap, key](int i) {
+                  cap->params[key] = i;
                   emit dataChanged();
                 });
         table->setCellWidget(row, col++, combo);

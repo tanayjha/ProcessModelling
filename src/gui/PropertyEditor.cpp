@@ -13,6 +13,7 @@
 #include "core/ComponentRegistry.h"
 #include "core/FluidLibrary.h"
 #include "core/Network.h"
+#include "gui/EnumParams.h"
 #include "gui/Equations.h"
 #include "gui/PlantData.h"
 
@@ -95,18 +96,20 @@ void PropertyEditor::rebuild() {
   // Parameters from the registry schema (with units).
   if (def) {
     for (const auto& ps : def->params) {
-      // Valve/damper flow characteristic: present as a named dropdown.
-      if (ps.name == "characteristic") {
+      // Enumerated parameters render as named dropdowns (stored value is the
+      // selected index). Centralised in EnumParams.h so registry + UI stay in sync.
+      if (EnumSpec es = enumOptions(ps.name); !es.options.isEmpty()) {
         auto* combo = new QComboBox(body_);
-        combo->addItems({"Linear", "Equal-percentage", "Quick-opening"});
-        int idx = (int)comp_->param("characteristic");
-        combo->setCurrentIndex(idx < 0 || idx > 2 ? 1 : idx);
+        combo->addItems(es.options);
+        int idx = (int)comp_->param(ps.name);
+        combo->setCurrentIndex(idx < 0 || idx >= es.options.size() ? 0 : idx);
+        std::string key = ps.name;
         connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-                [this](int i) {
-                  if (comp_) comp_->params["characteristic"] = i;
+                [this, key](int i) {
+                  if (comp_) comp_->params[key] = i;
                   emit edited();
                 });
-        form->addRow("Characteristic", combo);
+        form->addRow(es.label, combo);
         continue;
       }
       auto* edit = new QLineEdit(body_);

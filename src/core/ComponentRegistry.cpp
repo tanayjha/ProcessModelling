@@ -243,6 +243,13 @@ void registerHydraulicComponents() {
                       {"height", "m", 2.5, 0.0, 0.0},
                       {"level", "m", 0.0, 0.0, 0.0},
                       {"p_top", "Pa", 7.0e5, 0.0, 0.0},
+                      {"shape", "0/1", 1.0, 0.0, 1.0},  // 0=rectangular,1=cylindrical
+                      {"tankLength", "m", 2.5, 0.0, 0.0},
+                      {"tankWidth", "m", 1.0, 0.0, 0.0},
+                      {"usableVolume", "%", 90.0, 0.0, 100.0},
+                      {"maxPressure", "Pa", 1.0e6, 0.0, 0.0},
+                      {"insulationThk", "m", 0.05, 0.0, 0.0},
+                      {"tankMass", "kg", 1500.0, 0.0, 0.0},
                       {"elevation", "m", 0.0, 0.0, 0.0}},
                      "Air"});
   }
@@ -317,11 +324,18 @@ void registerHydraulicComponents() {
   // Manual handwheel: operator-set, no automatic action.
   reg.registerDef({"ManualActuator", I, "HW", {{"sig", BI, SIG}},
                    {{"turnsToOpen", "-", 12.0, 0.0, 0.0}}});
-  // Pneumatic diaphragm actuator with positioner: continuous modulation.
+  // Pneumatic diaphragm actuator with positioner: continuous modulation. The
+  // instrument-air supply is regulated to `prvSetpoint` (PRV) before the
+  // diaphragm; if it falls below `minPressure` the actuator fails to its
+  // fail-safe position dictated by `valveType` (air-to-open fails closed,
+  // air-to-close fails open, air-to-open/air-to-close holds).
   reg.registerDef({"PneumaticActuatorModulating", I, "PA", {{"sig", BI, SIG}},
                    {{"modulating", "0/1", 1.0, 1.0, 1.0},
                     {"strokeTime", "s", 4.0, 0.0, 0.0},
                     {"supplyP", "Pa", 4.0e5, 0.0, 0.0},
+                    {"prvSetpoint", "Pa", 4.0e5, 0.0, 0.0},
+                    {"minPressure", "Pa", 1.4e5, 0.0, 0.0},
+                    {"valveType", "0/1/2", 0.0, 0.0, 2.0},
                     {"failPosition", "-", 0.0, 0.0, 1.0}}});
   // Pneumatic on/off actuator (solenoid piloted): open or shut only.
   reg.registerDef({"PneumaticActuatorOnOff", I, "PAO", {{"sig", BI, SIG}},
@@ -329,6 +343,35 @@ void registerHydraulicComponents() {
                     {"strokeTime", "s", 1.5, 0.0, 0.0},
                     {"supplyP", "Pa", 4.0e5, 0.0, 0.0},
                     {"failPosition", "-", 0.0, 0.0, 1.0}}});
+  // Solenoid actuator: electrically driven open/close with separate opening and
+  // closing strokes. Position is scaled between posScaleLo..posScaleHi in
+  // engineering units; actChar selects the stroke characterization and action
+  // selects normal/reverse travel.
+  reg.registerDef({"SolenoidActuator", I, "SOL", {{"sig", BI, SIG}},
+                   {{"openTime", "s", 1.0, 0.0, 0.0},
+                    {"closeTime", "s", 1.0, 0.0, 0.0},
+                    {"posScaleLo", "eu", 0.0, 0.0, 0.0},
+                    {"posScaleHi", "eu", 100.0, 0.0, 0.0},
+                    {"actChar", "0..3", 0.0, 0.0, 3.0},
+                    {"action", "0/1", 0.0, 0.0, 1.0}}});
+
+  // Analog transmitter: maps an input engineering span (in0pct..in100pct) onto a
+  // measurement span (out0pct..out100pct), clamped to `overrange` per-unit beyond
+  // span. Three cascaded first-order lags model the sensor/transmitter dynamics;
+  // `noise` is added as a percentage of range and `malfTime` is the malfunction
+  // ramp time constant. `xchar` selects the transfer characteristic.
+  reg.registerDef({"AnalogTransmitter", I, "AT", {{"sig", BI, SIG}},
+                   {{"in0pct", "eu", 0.0, 0.0, 0.0},
+                    {"in100pct", "eu", 100.0, 0.0, 0.0},
+                    {"out0pct", "eu", 4.0, 0.0, 0.0},
+                    {"out100pct", "eu", 20.0, 0.0, 0.0},
+                    {"overrange", "pu", 1.1, 1.0, 0.0},
+                    {"lag1", "s", 0.5, 0.0, 0.0},
+                    {"lag2", "s", 0.0, 0.0, 0.0},
+                    {"lag3", "s", 0.0, 0.0, 0.0},
+                    {"noise", "%", 0.0, 0.0, 0.0},
+                    {"malfTime", "s", 0.0, 0.0, 0.0},
+                    {"xchar", "0..2", 0.0, 0.0, 2.0}}});
 
   // Process switch (pressure/level/flow/temp): trips at a setpoint.
   reg.registerDef({"Switch", I, "XS", {{"sig", BI, SIG}},
