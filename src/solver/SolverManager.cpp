@@ -6,6 +6,7 @@
 #include "components/hydraulic/BranchLaw.h"
 #include "core/Results.h"
 #include "solver/ControlSolver.h"
+#include "solver/Malfunctions.h"
 #include "solver/NodeGraph.h"
 #include "solver/ThermalCoupling.h"
 
@@ -19,6 +20,7 @@ void SolverManager::solveAuxDomains(Network& net, Results& out, double t) {
 
 SolveReport SolverManager::runSteady(Network& net, Results& out) {
   out.clear();
+  applyMalfunctions(net);  // instructor malfunctions + operator overrides
   SolveReport rep = hydraulic_.solveSteady(net, out, 0.0);
   solveAuxDomains(net, out, 0.0);
   return rep;
@@ -29,6 +31,8 @@ SolveReport SolverManager::stepTransient(Network& net, Results& out, double dt,
   // Control pass first: PID controllers act on the previous cycle's readings
   // and reposition their valves before this cycle's hydraulic balance.
   applyControls(net, out, dt);
+  // Then instructor malfunctions / operator overrides win over the logic output.
+  applyMalfunctions(net);
   SolveReport rep = hydraulic_.solveSteady(net, out, t);
   solveAuxDomains(net, out, t);
 

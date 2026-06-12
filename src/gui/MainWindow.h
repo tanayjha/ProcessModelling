@@ -19,6 +19,7 @@ class PropertyEditor;
 class HierarchyDock;
 class TrendDock;
 class ProjectDock;
+class DebugDock;
 class SimController;
 class Component;
 
@@ -94,6 +95,7 @@ class MainWindow : public QMainWindow {
   HierarchyDock* hierarchy_ = nullptr;
   TrendDock* trends_ = nullptr;
   ProjectDock* project_ = nullptr;
+  DebugDock* debug_ = nullptr;
   QLabel* clock_ = nullptr;
 };
 

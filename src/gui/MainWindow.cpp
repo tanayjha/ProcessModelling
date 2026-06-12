@@ -19,8 +19,10 @@
 
 #include "core/ComponentRegistry.h"
 #include "core/Project.h"
+#include "gui/DebugDock.h"
 #include "gui/DiagramScene.h"
 #include "gui/HierarchyDock.h"
+#include "gui/InstructorDialog.h"
 #include "gui/PaletteDock.h"
 #include "gui/PlantData.h"
 #include "gui/ProjectDock.h"
@@ -48,11 +50,14 @@ MainWindow::MainWindow() {
   properties_ = new PropertyEditor(this);
   hierarchy_ = new HierarchyDock(this);
   project_ = new ProjectDock(this);
+  debug_ = new DebugDock(this);
 
   addDockWidget(Qt::LeftDockWidgetArea, palette_);
   addDockWidget(Qt::LeftDockWidgetArea, project_);
   addDockWidget(Qt::LeftDockWidgetArea, hierarchy_);
   addDockWidget(Qt::RightDockWidgetArea, properties_);
+  addDockWidget(Qt::RightDockWidgetArea, debug_);
+  tabifyDockWidget(properties_, debug_);  // share the right column with Properties
 
   // The first (pristine) document; trends_ binds to its results.
   Document* first = addDocument(std::make_unique<Network>(), "Untitled", "");
@@ -106,7 +111,11 @@ Document* MainWindow::addDocument(std::unique_ptr<Network> net,
   Document* d = doc.get();
   connect(d->scene, &DiagramScene::componentSelected, this, [this, d](Component* c) {
     d->selected = c;
-    if (d == activeDoc()) properties_->showComponent(c);
+    if (d == activeDoc()) {
+      properties_->showComponent(c);
+      debug_->showComponent(c, d->net.get());
+      debug_->refresh(*d->results);
+    }
   });
   connect(d->scene, &DiagramScene::networkChanged, this, [this, d]() {
     bankUndo(d);
@@ -194,6 +203,7 @@ void MainWindow::onSimUpdated(Document* d) {
   d->scene->updateRuntime(*d->results);
   if (d == activeDoc()) {
     trends_->liveUpdate();
+    debug_->refresh(*d->results);
     updateClock(d);
   }
 }
@@ -284,6 +294,24 @@ void MainWindow::buildMenus() {
                  [this]() { if (auto* s = activeSim()) s->singleStep(); });
   sim->addAction("Rese&t", this, [this]() { if (auto* s = activeSim()) s->reset(); });
   sim->addSeparator();
+  sim->addSeparator();
+  sim->addAction("&Instructor Station (Malfunctions)...", this, [this]() {
+    Document* d = activeDoc();
+    if (!d || d->integrated) {
+      statusBar()->showMessage("Open an editable mimic to set malfunctions.", 3000);
+      return;
+    }
+    InstructorDialog dlg(d->net.get(), this);
+    connect(&dlg, &InstructorDialog::changed, this, [this, d]() {
+      // Apply immediately: re-solve steady so the malfunction/override shows,
+      // and refresh overlays/debug. During a live run the next cycle picks it up.
+      if (d->sim->mode() != SimController::Running) {
+        d->sim->initializeSteady();
+        onSimUpdated(d);
+      }
+    });
+    dlg.exec();
+  });
   sim->addAction("Rebuild &Integrated Plant", this, [this]() {
     Document* d = activeDoc();
     if (d && d->integrated) {
@@ -312,6 +340,7 @@ void MainWindow::buildMenus() {
                          static_cast<QDockWidget*>(project_),
                          static_cast<QDockWidget*>(hierarchy_),
                          static_cast<QDockWidget*>(properties_),
+                         static_cast<QDockWidget*>(debug_),
                          static_cast<QDockWidget*>(trends_)})
     if (d) view->addAction(d->toggleViewAction());
   view->addSeparator();
