@@ -130,8 +130,9 @@ void PropertyEditor::rebuild() {
     }
   }
 
-  // Pump head-flow curve editor.
-  if (comp_->type == "Pump") {
+  // Pump-style turbomachine head-flow curve editor (pump/fan/blower/compressor).
+  if (comp_->type == "Pump" || comp_->type == "Fan" ||
+      comp_->type == "Blower" || comp_->type == "Compressor") {
     auto* curveBtn = new QPushButton("Edit Head Curve…", body_);
     connect(curveBtn, &QPushButton::clicked, this, [this]() {
       if (!comp_) return;

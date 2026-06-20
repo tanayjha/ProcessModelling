@@ -36,12 +36,14 @@ CurveEditorDialog::CurveEditorDialog(Component* c, const QString& curveKey,
   table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
   layout->addWidget(table_);
 
-  // Seed from existing curve, or from the pump's rated/shutoff scalars.
+  // Seed from existing curve, or from the turbomachine's rated/shutoff scalars.
   const auto* existing = comp_->curve(key_.toStdString());
   std::vector<std::pair<double, double>> seed;
   if (existing && !existing->empty()) {
     seed = *existing;
-  } else if (comp_->type == "Pump") {
+  } else if (comp_->type == "Pump" || comp_->type == "Fan" ||
+             comp_->type == "Blower" || comp_->type == "Compressor") {
+    // Pump-style turbomachines share ratedFlow/ratedHead/shutoffHead scalars.
     double Qr = comp_->param("ratedFlow"), Hr = comp_->param("ratedHead"),
            H0 = comp_->param("shutoffHead");
     seed = {{0.0, H0}, {Qr, Hr}, {1.5 * Qr, Hr - 0.6 * (H0 - Hr)}};
